@@ -23,4 +23,9 @@ public sealed interface RaftMessage {
 
     public record RequestVoteResponse(int term, boolean voteGranted) implements RaftMessage {}
 
+    public record TimeOut() implements RaftMessage {}
+
+
+    public record HeartBeatTimeOut() implements RaftMessage {}
+
 }

@@ -1,23 +1,31 @@
 import akka.actor.typed.Behavior;
-import akka.actor.typed.javadsl.AbstractBehavior;
-import akka.actor.typed.javadsl.ActorContext;
-import akka.actor.typed.javadsl.Behaviors;
-import akka.actor.typed.javadsl.Receive;
+import akka.actor.typed.javadsl.*;
 
 public class Follower extends AbstractBehavior<RaftMessage> {
 
     public static Behavior<RaftMessage> create(){
         return Behaviors.setup(context -> {
-            return new Follower(context);
+            return Behaviors.withTimers(timers -> {
+                return new Follower(context, timers);
+            });
         });
-    }
-
-    private Follower(ActorContext<RaftMessage> context){
-        super(context);
     }
 
     @Override
     public Receive<RaftMessage> createReceive() {
-        return null;
+        return newReceiveBuilder().
+                onMessage(RaftMessage.class, this::dispatch)
+                .build();
+    }
+
+    private TimerScheduler<RaftMessage> timer;
+
+    private Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers){
+        super(context);
+        timer = timers;
+    }
+
+    private Behavior<RaftMessage> dispatch(RaftMessage msg){
+        return this;
     }
 }
