@@ -6,7 +6,6 @@ import org.junit.Assert.*;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.w3c.dom.events.Event;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +23,19 @@ public class FollowerTest {
             RaftMessage.AppendEntriesResponse msg = (RaftMessage.AppendEntriesResponse) response;
             assertEquals(expectedSuccess, msg.success());
             assertEquals(expectedTerm, msg.term());
+        }else{
+            throw new AssertionError("Incorrect Response Message Type");
+        }
+    }
+
+    private static void assertCorrectLogResponse(RaftMessage response, List<Entry> expectedLog) {
+        System.out.println(response);
+        if (response instanceof RaftMessage.TestMessage.GetLogResponse){
+            RaftMessage.TestMessage.GetLogResponse msg = ( RaftMessage.TestMessage.GetLogResponse) response;
+            assertEquals(expectedLog.size(), msg.log().size());
+            for (int i = 0; i < msg.log().size(); i++){
+                assertTrue(msg.log().get(i).equals(expectedLog.get(i)));
+            }
         }else{
             throw new AssertionError("Incorrect Response Message Type");
         }
@@ -55,8 +67,56 @@ public class FollowerTest {
     public void FollowerEntryAtPrevLogIndexDoesntMatchPrevLogTermReturnsFalseResponse(){
         List<Entry> followerLog = new ArrayList<Entry>();
         followerLog.add(new Entry(1, new StringCommand(0,0,"")));
-        follower = BehaviorTestKit.create(TestableFollower.create(0, inboxRef, followerLog));
-        follower.run(new RaftMessage.AppendEntries(0, inboxRef, 1, 2, new ArrayList<Entry>(), 0));
-        assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 0, false);
+        follower = BehaviorTestKit.create(TestableFollower.create(3, inboxRef, followerLog));
+        follower.run(new RaftMessage.AppendEntries(3, inboxRef, 0, 2, new ArrayList<Entry>(), 0));
+        assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 3, false);
     }
+
+    @Test
+    public void testCorrectSuccessMessageReturnedFromSuccessfulAppendEntries(){
+        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, new ArrayList<Entry>()));
+        follower.run(new RaftMessage.AppendEntries(1, inboxRef, -1, 0, new ArrayList<Entry>(), 0));
+        assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 1, true);
+    }
+
+    @Test
+    public void OneExistingEntryConflictsWithLeaderFollowerDeletesEntry(){
+        List<Entry> followerLog = new ArrayList<>();
+        List<Entry> expectedLog = new ArrayList<>();
+        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
+        RaftMessage appendEntries = new RaftMessage.AppendEntries(1, inboxRef, -1, -1, new ArrayList<Entry>(), 0);
+        assertCorrectLogAfterAppendEntries(expectedLog, appendEntries);
+    }
+
+    @Test
+    public void FirstEntryConflictsWithLeaderFollowerDeletesAllEntries(){
+        List<Entry> followerLog = new ArrayList<>();
+        List<Entry> expectedLog = new ArrayList<>();
+        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
+        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
+        RaftMessage appendEntries = new RaftMessage.AppendEntries(1, inboxRef, -1, 0, new ArrayList<Entry>(), 0);
+        assertCorrectLogAfterAppendEntries(expectedLog, appendEntries);
+    }
+
+    private void assertCorrectLogAfterAppendEntries(List<Entry> expectedLog, RaftMessage appendEntries) {
+        follower.run(appendEntries);
+        follower.run(new RaftMessage.TestMessage.GetLog(inbox.getRef()));
+        List<RaftMessage> responses = inbox.getAllReceived();
+        assertCorrectLogResponse(responses.get(1), expectedLog);
+    }
+
+//    @Test
+//    public void SecondEntryConflictsWithLeaderFollowerDeletesSecondEntry(){
+//        List<Entry> followerLog = new ArrayList<Entry>();
+//        Entry e1 = new Entry(1, new StringCommand(0,0,""));
+//        followerLog.add(e1);
+//        followerLog.add(new Entry(2, new StringCommand(0,0,"")));
+//        List<Entry> expectedLog = new ArrayList<>();
+//        expectedLog.add(e1);
+//
+//        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
+//        assertCorrectLogAfterAppendEntries(expectedLog, new RaftMessage.AppendEntries(1, inboxRef, 0, 0, new ArrayList<Entry>(), 0));
+//    }
 }

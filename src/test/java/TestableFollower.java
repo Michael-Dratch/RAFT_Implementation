@@ -25,4 +25,14 @@ public class TestableFollower extends Follower{
         this.votedFor = votedFor;
         this.log = log;
     }
+
+    protected void handleTestMessage(RaftMessage.TestMessage msg){
+        switch (msg) {
+            case RaftMessage.TestMessage.GetLog message:
+                message.sender().tell(new RaftMessage.TestMessage.GetLogResponse(this.log));
+                break;
+            default:
+                throw new IllegalStateException("Unexpected value: " + msg);
+        }
+    }
 }

@@ -3,7 +3,7 @@ import akka.actor.typed.ActorRef;
 import java.util.HashMap;
 import java.util.List;
 
-public sealed interface RaftMessage {
+public interface RaftMessage {
 
     public record AppendEntries(int term,
                                 ActorRef<RaftMessage> leaderRef,
@@ -28,4 +28,8 @@ public sealed interface RaftMessage {
 
     public record HeartBeatTimeOut() implements RaftMessage {}
 
+    public interface TestMessage extends RaftMessage{
+        public record GetLog(ActorRef<RaftMessage> sender) implements TestMessage{}
+        public record GetLogResponse(List<Entry> log) implements TestMessage{}
+    }
 }
