@@ -68,7 +68,17 @@ public class Follower extends AbstractBehavior<RaftMessage> {
             msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
         }
 
-        this.log.clear();
+        int numSent = msg.entries().size();
+        System.out.println(this.log.size());
+       // this.log.remove(1);
+
+        this.log.addAll(msg.entries());
+//        for (int i = 0; i < numSent; i++){
+//            this.log.add()
+//        }
+
+
+
         msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, true));
     }
 

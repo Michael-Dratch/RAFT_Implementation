@@ -28,8 +28,15 @@ public class FollowerTest {
         }
     }
 
+    private void assertCorrectResponseAndLogAfterAppendEntries(int expectedTerm, boolean expectedSuccess, List<Entry> expectedLog, RaftMessage appendEntries) {
+        follower.run(appendEntries);
+        follower.run(new RaftMessage.TestMessage.GetLog(inbox.getRef()));
+        List<RaftMessage> responses = inbox.getAllReceived();
+        assertCorrectAppendEntriesResponse(responses.get(0), expectedTerm, expectedSuccess);
+        assertCorrectLogResponse(responses.get(1), expectedLog);
+    }
+
     private static void assertCorrectLogResponse(RaftMessage response, List<Entry> expectedLog) {
-        System.out.println(response);
         if (response instanceof RaftMessage.TestMessage.GetLogResponse){
             RaftMessage.TestMessage.GetLogResponse msg = ( RaftMessage.TestMessage.GetLogResponse) response;
             assertEquals(expectedLog.size(), msg.log().size());
@@ -86,37 +93,52 @@ public class FollowerTest {
         followerLog.add(new Entry(1, new StringCommand(0,0,"")));
         follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
         RaftMessage appendEntries = new RaftMessage.AppendEntries(1, inboxRef, -1, -1, new ArrayList<Entry>(), 0);
-        assertCorrectLogAfterAppendEntries(expectedLog, appendEntries);
+        assertCorrectResponseAndLogAfterAppendEntries(1, true, expectedLog, appendEntries);
     }
 
     @Test
-    public void FirstEntryConflictsWithLeaderFollowerDeletesAllEntries(){
+    public void FollowerHasTwoEntriesPrevLogIsConsistentNoNewEntriesReturnsSuccessAndLogStaysTheSame(){
         List<Entry> followerLog = new ArrayList<>();
         List<Entry> expectedLog = new ArrayList<>();
-        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
-        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
+        Entry e1 = new Entry(1, new StringCommand(0,0,""));
+        followerLog.add(e1);
+        followerLog.add(e1);
+        expectedLog.add(e1);
+        expectedLog.add(e1);
         follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
         RaftMessage appendEntries = new RaftMessage.AppendEntries(1, inboxRef, -1, 0, new ArrayList<Entry>(), 0);
-        assertCorrectLogAfterAppendEntries(expectedLog, appendEntries);
+        assertCorrectResponseAndLogAfterAppendEntries(1, true, expectedLog, appendEntries);
     }
 
-    private void assertCorrectLogAfterAppendEntries(List<Entry> expectedLog, RaftMessage appendEntries) {
-        follower.run(appendEntries);
-        follower.run(new RaftMessage.TestMessage.GetLog(inbox.getRef()));
-        List<RaftMessage> responses = inbox.getAllReceived();
-        assertCorrectLogResponse(responses.get(1), expectedLog);
+    @Test
+    public void FirstEntryConflictsWithLeaderPrevLogTermFalseReply(){
+        List<Entry> followerLog = new ArrayList<Entry>();
+        List<Entry> expectedLog = new ArrayList<>();
+        Entry e1 = new Entry(1, new StringCommand(0,0,""));
+        Entry e2 = new Entry(2, new StringCommand(0,0,""));
+        followerLog.add(e1);
+        followerLog.add(e2);
+        expectedLog.add(e1);
+
+        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
+        follower.run(new RaftMessage.AppendEntries(1, inboxRef, 0, 0, new ArrayList<Entry>(), 0));
+        assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 1, false);
     }
 
-//    @Test
-//    public void SecondEntryConflictsWithLeaderFollowerDeletesSecondEntry(){
-//        List<Entry> followerLog = new ArrayList<Entry>();
-//        Entry e1 = new Entry(1, new StringCommand(0,0,""));
-//        followerLog.add(e1);
-//        followerLog.add(new Entry(2, new StringCommand(0,0,"")));
-//        List<Entry> expectedLog = new ArrayList<>();
-//        expectedLog.add(e1);
-//
-//        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
-//        assertCorrectLogAfterAppendEntries(expectedLog, new RaftMessage.AppendEntries(1, inboxRef, 0, 0, new ArrayList<Entry>(), 0));
-//    }
+    @Test
+    public void FollowerHas2Entries1stEntryConsistentWithPrevLogNoNewEntriesLeadsToSuccessAndLogStaysSame(){
+        List<Entry> followerLog = new ArrayList<Entry>();
+        List<Entry> expectedLog = new ArrayList<>();
+        Entry e1 = new Entry(1, new StringCommand(0,0,""));
+        Entry e2 = new Entry(2, new StringCommand(0,0,""));
+        followerLog.add(e1);
+        followerLog.add(e2);
+        expectedLog.add(e1);
+        expectedLog.add(e2);
+
+        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
+        assertCorrectResponseAndLogAfterAppendEntries(1, true, expectedLog, new RaftMessage.AppendEntries(1, inboxRef, 0, 1, new ArrayList<Entry>(), 0));
+
+    }
+
 }
