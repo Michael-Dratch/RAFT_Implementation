@@ -13,8 +13,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class FollowerTest {
-
     BehaviorTestKit<RaftMessage> follower;
+
     TestInbox<RaftMessage> inbox;
     ActorRef<RaftMessage> inboxRef;
 
@@ -48,6 +48,10 @@ public class FollowerTest {
         }
     }
 
+    private static Entry createEntry(int term) {
+        return new Entry(term, new StringCommand(0, 0, ""));
+    }
+
     @Before
     public void setUp(){
         inbox = TestInbox.create();
@@ -73,7 +77,7 @@ public class FollowerTest {
     @Test
     public void FollowerEntryAtPrevLogIndexDoesntMatchPrevLogTermReturnsFalseResponse(){
         List<Entry> followerLog = new ArrayList<Entry>();
-        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
+        followerLog.add(createEntry(1));
         follower = BehaviorTestKit.create(TestableFollower.create(3, inboxRef, followerLog));
         follower.run(new RaftMessage.AppendEntries(3, inboxRef, 0, 2, new ArrayList<Entry>(), 0));
         assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 3, false);
@@ -87,20 +91,10 @@ public class FollowerTest {
     }
 
     @Test
-    public void OneExistingEntryConflictsWithLeaderFollowerDeletesEntry(){
-        List<Entry> followerLog = new ArrayList<>();
-        List<Entry> expectedLog = new ArrayList<>();
-        followerLog.add(new Entry(1, new StringCommand(0,0,"")));
-        follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
-        RaftMessage appendEntries = new RaftMessage.AppendEntries(1, inboxRef, -1, -1, new ArrayList<Entry>(), 0);
-        assertCorrectResponseAndLogAfterAppendEntries(1, true, expectedLog, appendEntries);
-    }
-
-    @Test
     public void FollowerHasTwoEntriesPrevLogIsConsistentNoNewEntriesReturnsSuccessAndLogStaysTheSame(){
         List<Entry> followerLog = new ArrayList<>();
         List<Entry> expectedLog = new ArrayList<>();
-        Entry e1 = new Entry(1, new StringCommand(0,0,""));
+        Entry e1 = createEntry(1);
         followerLog.add(e1);
         followerLog.add(e1);
         expectedLog.add(e1);
@@ -114,8 +108,8 @@ public class FollowerTest {
     public void FirstEntryConflictsWithLeaderPrevLogTermFalseReply(){
         List<Entry> followerLog = new ArrayList<Entry>();
         List<Entry> expectedLog = new ArrayList<>();
-        Entry e1 = new Entry(1, new StringCommand(0,0,""));
-        Entry e2 = new Entry(2, new StringCommand(0,0,""));
+        Entry e1 = createEntry(1);
+        Entry e2 = createEntry(2);
         followerLog.add(e1);
         followerLog.add(e2);
         expectedLog.add(e1);
@@ -129,8 +123,8 @@ public class FollowerTest {
     public void FollowerHas2Entries1stEntryConsistentWithPrevLogNoNewEntriesLeadsToSuccessAndLogStaysSame(){
         List<Entry> followerLog = new ArrayList<Entry>();
         List<Entry> expectedLog = new ArrayList<>();
-        Entry e1 = new Entry(1, new StringCommand(0,0,""));
-        Entry e2 = new Entry(2, new StringCommand(0,0,""));
+        Entry e1 = createEntry(1);
+        Entry e2 = createEntry(2);
         followerLog.add(e1);
         followerLog.add(e2);
         expectedLog.add(e1);
@@ -139,6 +133,50 @@ public class FollowerTest {
         follower = BehaviorTestKit.create(TestableFollower.create(1, inboxRef, followerLog));
         assertCorrectResponseAndLogAfterAppendEntries(1, true, expectedLog, new RaftMessage.AppendEntries(1, inboxRef, 0, 1, new ArrayList<Entry>(), 0));
 
+    }
+
+    @Test
+    public void AppendEntriesSuccessOneExistingEntryConflictsWithLeaderEntryFollowerDeletesEntryAddsNewEntry(){
+        List<Entry> followerLog = new ArrayList<>();
+        List<Entry> expectedLog = new ArrayList<>();
+        List<Entry> messageEntries = new ArrayList<>();
+        messageEntries.add(createEntry(1));
+        expectedLog.add(createEntry(1));
+        followerLog.add(createEntry(2));
+        follower = BehaviorTestKit.create(TestableFollower.create(3, inboxRef, followerLog));
+        RaftMessage appendEntries = new RaftMessage.AppendEntries(3, inboxRef, -1, 0, messageEntries, 0);
+        assertCorrectResponseAndLogAfterAppendEntries(3, true, expectedLog, appendEntries);
+    }
+
+    @Test
+    public void AppendEntriesSuccessFirstOfTwoExistingEntryConflictsWithLeaderEntryFollowerDeletesBothEntriesAddsNewEntry(){
+        List<Entry> followerLog = new ArrayList<>();
+        List<Entry> expectedLog = new ArrayList<>();
+        List<Entry> messageEntries = new ArrayList<>();
+        messageEntries.add(createEntry(1));
+        expectedLog.add(createEntry(1));
+        followerLog.add(createEntry(2));
+        followerLog.add(createEntry(3));
+        follower = BehaviorTestKit.create(TestableFollower.create(3, inboxRef, followerLog));
+        RaftMessage appendEntries = new RaftMessage.AppendEntries(3, inboxRef, -1, 0, messageEntries, 0);
+        assertCorrectResponseAndLogAfterAppendEntries(3, true, expectedLog, appendEntries);
+    }
+
+    @Test
+    public void AppendEntriesSuccessSecondOfThreeExistingEntryConflictsWithLeaderEntryFollowerDeletes2and3AddsNewEntry(){
+        List<Entry> followerLog = new ArrayList<>();
+        List<Entry> expectedLog = new ArrayList<>();
+        List<Entry> messageEntries = new ArrayList<>();
+        messageEntries.add(createEntry(1));
+        messageEntries.add(createEntry(3));
+        expectedLog.add(createEntry(1));
+        expectedLog.add(createEntry(3));
+        followerLog.add(createEntry(1));
+        followerLog.add(createEntry(2));
+        followerLog.add(createEntry(2));
+        follower = BehaviorTestKit.create(TestableFollower.create(3, inboxRef, followerLog));
+        RaftMessage appendEntries = new RaftMessage.AppendEntries(3, inboxRef, -1, 0, messageEntries, 0);
+        assertCorrectResponseAndLogAfterAppendEntries(3, true, expectedLog, appendEntries);
     }
 
 }

@@ -66,20 +66,47 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     private void handleAppendEntries(RaftMessage.AppendEntries msg){
         if (doesAppendEntriesFail(msg)){
             msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
+        } else {
+            processSuccessfulAppendEntries(msg);
+            msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, true));
         }
 
-        int numSent = msg.entries().size();
-        System.out.println(this.log.size());
-       // this.log.remove(1);
-
-        this.log.addAll(msg.entries());
-//        for (int i = 0; i < numSent; i++){
-//            this.log.add()
-//        }
 
 
 
-        msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, true));
+    }
+
+    private void processSuccessfulAppendEntries(RaftMessage.AppendEntries msg) {
+        int entryCount = msg.entries().size();
+
+        for (int i = 0; i < entryCount; i++){
+            if (entryIndexExceedsLogSize(msg, i)){
+                addRemainingEntriesToLog(msg, i);
+                break;
+            }
+
+            if (isConflictBetweenMessageAndLogEntry(msg, i)){
+                removeConflictingLogEntries(msg.prevLogIndex(), i);
+                addRemainingEntriesToLog(msg, i);
+                break;
+            }
+        }
+    }
+
+    private void removeConflictingLogEntries(int prevLogIndex, int i) {
+        this.log = this.log.subList(0, prevLogIndex + i + 1);
+    }
+
+    private boolean entryIndexExceedsLogSize(RaftMessage.AppendEntries msg, int i) {
+        return msg.prevLogIndex() + i > log.size() - 1;
+    }
+
+    private void addRemainingEntriesToLog(RaftMessage.AppendEntries msg, int i) {
+        this.log.addAll(msg.entries().subList(i, msg.entries().size()));
+    }
+
+    private boolean isConflictBetweenMessageAndLogEntry(RaftMessage.AppendEntries msg, int i) {
+        return msg.entries().get(i).term() != this.log.get(msg.prevLogIndex() + i + 1).term();
     }
 
     private boolean doesAppendEntriesFail(RaftMessage.AppendEntries msg) {
