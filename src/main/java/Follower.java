@@ -5,6 +5,8 @@ import akka.actor.typed.javadsl.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.lang.Math.min;
+
 
 public class Follower extends AbstractBehavior<RaftMessage> {
 
@@ -57,12 +59,12 @@ public class Follower extends AbstractBehavior<RaftMessage> {
                 handleTestMessage(message);
                 break;
             default:
-                throw new IllegalStateException("Unexpected value: " + msg);
+                break;
         }
         return this;
     }
-    
-    
+
+
     private void handleAppendEntries(RaftMessage.AppendEntries msg){
         if (doesAppendEntriesFail(msg)){
             msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
@@ -71,9 +73,14 @@ public class Follower extends AbstractBehavior<RaftMessage> {
             msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, true));
         }
 
+    }
 
-
-
+    private boolean doesAppendEntriesFail(RaftMessage.AppendEntries msg) {
+        if (msg.term() < this.currentTerm){return true;}
+        else if (msg.prevLogIndex() == -1){return false;}
+        else if (this.log.size() < msg.prevLogIndex()){return true;}
+        else if(this.log.get(msg.prevLogIndex()).term() != msg.prevLogTerm()){return true;}
+        return false;
     }
 
     private void processSuccessfulAppendEntries(RaftMessage.AppendEntries msg) {
@@ -84,17 +91,13 @@ public class Follower extends AbstractBehavior<RaftMessage> {
                 addRemainingEntriesToLog(msg, i);
                 break;
             }
-
             if (isConflictBetweenMessageAndLogEntry(msg, i)){
                 removeConflictingLogEntries(msg.prevLogIndex(), i);
                 addRemainingEntriesToLog(msg, i);
                 break;
             }
         }
-    }
-
-    private void removeConflictingLogEntries(int prevLogIndex, int i) {
-        this.log = this.log.subList(0, prevLogIndex + i + 1);
+        updateCommitIndex(msg);
     }
 
     private boolean entryIndexExceedsLogSize(RaftMessage.AppendEntries msg, int i) {
@@ -109,12 +112,14 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         return msg.entries().get(i).term() != this.log.get(msg.prevLogIndex() + i + 1).term();
     }
 
-    private boolean doesAppendEntriesFail(RaftMessage.AppendEntries msg) {
-        if (msg.term() < this.currentTerm){return true;}
-        else if (msg.prevLogIndex() == -1){return false;}
-        else if (this.log.size() < msg.prevLogIndex()){return true;}
-        else if(this.log.get(msg.prevLogIndex()).term() != msg.prevLogTerm()){return true;}
-        return false;
+    private void removeConflictingLogEntries(int prevLogIndex, int i) {
+        this.log = this.log.subList(0, prevLogIndex + i + 1);
+    }
+
+    private void updateCommitIndex(RaftMessage.AppendEntries msg) {
+        if (msg.leaderCommit() > this.commitIndex){
+            this.commitIndex = min(msg.leaderCommit(), this.log.size() - 1);
+        }
     }
 
     protected void handleTestMessage(RaftMessage.TestMessage msg){

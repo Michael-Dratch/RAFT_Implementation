@@ -25,11 +25,13 @@ public interface RaftMessage {
 
     public record TimeOut() implements RaftMessage {}
 
-
     public record HeartBeatTimeOut() implements RaftMessage {}
+
 
     public interface TestMessage extends RaftMessage{
         public record GetLog(ActorRef<RaftMessage> sender) implements TestMessage{}
         public record GetLogResponse(List<Entry> log) implements TestMessage{}
+        public record GetCommitIndex(ActorRef<RaftMessage> sender) implements TestMessage {}
+        public record GetCommitIndexResponse(int commitIndex) implements TestMessage {}
     }
 }
