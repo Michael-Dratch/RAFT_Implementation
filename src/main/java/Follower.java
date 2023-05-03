@@ -2,6 +2,9 @@ import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -121,6 +124,23 @@ public class Follower extends AbstractBehavior<RaftMessage> {
             this.commitIndex = min(msg.leaderCommit(), this.log.size() - 1);
         }
     }
+
+    private void writeEntriesToFile(List<Entry> entries){
+        try {
+            String logFileName = "log_" + this.getContext().getSelf().path().uid() + ".ser";
+            FileOutputStream fos = new FileOutputStream(logFileName);
+            ObjectOutputStream oos = new ObjectOutputStream(fos);
+
+            for (Entry e: entries){
+                oos.writeObject(e);
+            }
+            oos.close();
+
+        }catch(IOException e){
+            throw new RuntimeException(e);
+        }
+    }
+
 
     protected void handleTestMessage(RaftMessage.TestMessage msg){
         //implemented in TestableFollower Class

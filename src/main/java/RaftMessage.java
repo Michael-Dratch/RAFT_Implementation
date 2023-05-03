@@ -33,5 +33,6 @@ public interface RaftMessage {
         public record GetLogResponse(List<Entry> log) implements TestMessage{}
         public record GetCommitIndex(ActorRef<RaftMessage> sender) implements TestMessage {}
         public record GetCommitIndexResponse(int commitIndex) implements TestMessage {}
+        public record SaveEntries(List<Entry> entries) implements TestMessage {}
     }
 }

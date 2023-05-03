@@ -8,6 +8,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.engine.discovery.predicates.IsPotentialTestContainer;
 
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -213,5 +214,61 @@ public class FollowerTest {
         assertCorrectCommitIndex(inbox.getAllReceived().get(1), 2);
     }
 
+    @Test
+    public void testCreateLogFileAndSaveEntries(){
+        List<Entry> entries = new ArrayList<>();
+        entries.add(createEntry(1));
 
+        follower = BehaviorTestKit.create(TestableFollower.create(3, new ArrayList<>(), -1));
+        follower.run(new RaftMessage.TestMessage.SaveEntries(entries));
+        assertActorLogFileCorrect(entries);
+
+        deleteActorDirectory();
+    }
+
+
+    private void deleteActorDirectory() {
+        File actorDirectory = getActorDirectory();
+        if (actorDirectory.exists()){
+            deleteDirectory(actorDirectory);
+        }
+    }
+
+    private void deleteDirectory(File directory){
+        File[] contents = directory.listFiles();
+        if (contents != null){
+            for (File file : contents){
+                deleteDirectory(file);
+            }
+        }
+        directory.delete();
+    }
+
+    private void assertActorLogFileCorrect(List<Entry> entries) {
+        File logFile = getLogFile();
+        try {
+            FileInputStream fos = new FileInputStream(logFile);
+            ObjectInputStream ois = new ObjectInputStream(fos);
+
+            for (Entry e: entries){
+                Entry logEntry = (Entry)ois.readObject();
+                assertTrue(e.equals(logEntry));
+            }
+            ois.close();
+        }catch(IOException e){
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private File getLogFile() {
+        String logPath = "./data/" + follower.getRef().path().uid() + "/log.ser";
+        return new File(logPath);
+    }
+
+    private File getActorDirectory() {
+        String path = "./data/" + follower.getRef().path().uid() + "/";
+        return new File(path);
+    }
 }

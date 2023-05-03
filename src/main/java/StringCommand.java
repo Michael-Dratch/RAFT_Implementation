@@ -1,4 +1,6 @@
-public class StringCommand implements Command {
+import java.io.Serializable;
+
+public class StringCommand implements Command, Serializable {
     private int clientID;
     private int commandID;
     private String value;
