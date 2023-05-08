@@ -134,6 +134,17 @@ public class FollowerTests {
         return new File(path);
     }
 
+    public void assertCorrectFollowerState(RaftMessage response,
+                                           List<Entry> expectedLog,
+                                           ActorRef<RaftMessage> expectedVotedFor){
+        if (response instanceof RaftMessage.TestMessage.GetStateResponse){
+            RaftMessage.TestMessage.GetStateResponse msg = (RaftMessage.TestMessage.GetStateResponse) response;
+            assertLogsAreEqual(expectedLog, msg.log());
+            assertEquals(expectedVotedFor, msg.votedFor());
+        }
+    }
+
+
     @Before
     public void setUp(){
         inbox = TestInbox.create();
@@ -350,6 +361,16 @@ public class FollowerTests {
     }
 
     @Test
+    public void requestVoteValidButFollowerAlreadyGaveVoteFollowerReturnsFalse(){
+        follower = BehaviorTestKit.create(TestableFollower.create(1, new ArrayList<>(), -1));
+        TestInbox<RaftMessage> inbox2 = TestInbox.create();
+        follower.run(new RaftMessage.RequestVote(1, inboxRef, 1, 1));
+        follower.run(new RaftMessage.RequestVote(1, inbox2.getRef(), 1, 1));
+        RaftMessage response = inbox2.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 1, false);
+    }
+
+    @Test
     public void requestVotHasSmallerLastLogIndexButLargerLastLogTermFollowerGrantsVote(){
         List<Entry> followerLog = new ArrayList<>();
         followerLog.add(createEntry(1));
@@ -388,7 +409,7 @@ public class FollowerTests {
         follower.run(new RaftMessage.TestMessage.GetState(inboxRef));
         RaftMessage response = inbox.receiveMessage();
         List<Entry> expectedLog = new ArrayList<>();
-        assertCorrectFollowerState(response, expectedLog);
+        assertCorrectFollowerState(response, expectedLog, null);
     }
 
     @Test
@@ -404,16 +425,21 @@ public class FollowerTests {
         List<Entry> expectedLog = newEntries;
         System.out.println("response size");
         System.out.println(responses.size());
-        assertCorrectFollowerState(responses.get(1), expectedLog);
+        assertCorrectFollowerState(responses.get(1), expectedLog, null);
     }
 
-    public void assertCorrectFollowerState(RaftMessage response, List<Entry> expectedLog){
-        if (response instanceof RaftMessage.TestMessage.GetStateResponse){
-            RaftMessage.TestMessage.GetStateResponse msg = (RaftMessage.TestMessage.GetStateResponse) response;
-            assertLogsAreEqual(expectedLog, msg.log());
-        }
-    }
 
     @Test
-    public void afterFailureFollowerWithLogEntriesAndVotedForRecoverLogEntriesAndVotedFor(){}
+    public void afterFailureFollowerWithVotedForRecoversVotedFor(){
+        follower = BehaviorTestKit.create(TestableFollower.create(1, new ArrayList<>(), -1));
+        TestInbox<RaftMessage> inbox2 = TestInbox.create();
+        follower.run(new RaftMessage.RequestVote(1, inboxRef, 1, 1));
+        follower.run(new RaftMessage.Failure());
+        follower.run(new RaftMessage.TestMessage.GetState(inboxRef));
+        List<RaftMessage> responses = inbox.getAllReceived();
+        assertCorrectFollowerState(responses.get(1), new ArrayList<>(), inboxRef);
+        follower.run(new RaftMessage.RequestVote(1, inbox2.getRef(), 1, 1));
+        RaftMessage response = inbox2.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 1, false);
+    }
 }

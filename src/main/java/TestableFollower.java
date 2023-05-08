@@ -19,7 +19,7 @@ public class TestableFollower extends Follower {
 
     }
 
-    // constructor without restart supervision strategy for debugging
+   //  constructor without restart supervision strategy for debugging
 //        public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log) {
 //        return Behaviors.setup(context -> {
 //                return Behaviors.withTimers(timers -> {
@@ -45,6 +45,13 @@ public class TestableFollower extends Follower {
             })).onFailure(SupervisorStrategy.restart());
     }
 
+//    public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log, int commitIndex) {
+//        return Behaviors.setup(context -> {
+//                    return Behaviors.withTimers(timers -> {
+//                        return new TestableFollower(context, timers, currentTerm, log, commitIndex);
+//                    });
+//                });
+//    }
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log, int commitIndex) {
 
         super(context, timers, new ServerFileWriter());

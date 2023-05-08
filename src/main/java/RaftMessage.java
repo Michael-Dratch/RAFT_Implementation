@@ -15,7 +15,7 @@ public interface RaftMessage {
     public record RequestVote(int term,
                               ActorRef<RaftMessage> candidateRef,
                               int lastLogIndex,
-                              int lastLagTerm
+                              int lastLogTerm
                               ) implements RaftMessage {}
 
     public record AppendEntriesResponse(int term, boolean success) implements RaftMessage {}

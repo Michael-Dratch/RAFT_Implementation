@@ -66,6 +66,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         this.log = new ArrayList<Entry>();
 
         dataManager.setServerID(context.getSelf().path().uid());
+        this.votedFor = dataManager.getVotedFor();
         this.log = dataManager.getLog();
     }
 
@@ -81,7 +82,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
             case RaftMessage.TestMessage message:
                 handleTestMessage(message);
                 break;
-            case RaftMessage.Failure message:
+            case RaftMessage.Failure message:   // Used to simulate node failure
                 int result = 1/0;
                 break;
             default:
@@ -114,12 +115,9 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     }
 
     private void processSuccessfulAppendEntries(RaftMessage.AppendEntries msg) {
-        System.out.println(msg.entries().size());
         int entryCount = msg.entries().size();
 
         for (int i = 0; i < entryCount; i++){
-            System.out.println(entryCount);
-            System.out.println(i);
             if (entryIndexExceedsLogSize(msg, i)){
                 addRemainingEntriesToLog(msg, i);
                 break;
@@ -144,12 +142,6 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     }
 
     private boolean isConflictBetweenMessageAndLogEntry(RaftMessage.AppendEntries msg, int i) {
-        System.out.println("i:");
-        System.out.println(i);
-        System.out.println("prev log index:");
-        System.out.println(msg.prevLogIndex());
-        System.out.println("msg.prevLogIndex() + 1 + i:");
-        System.out.println(msg.prevLogIndex() + 1 + i);
         return msg.entries().get(i).term() != this.log.get(msg.prevLogIndex() + 1 + i).term();
     }
 
@@ -168,19 +160,23 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         if (doesRequestVoteFail(msg)) {
             returnRequestVoteResponse(msg, false);
         }else{
+            this.votedFor = msg.candidateRef();
+            this.dataManager.saveVotedFor(this.votedFor);
             returnRequestVoteResponse(msg, true);
         }
     }
 
     private boolean doesRequestVoteFail(RaftMessage.RequestVote msg){
-        if (msg.term() < this.currentTerm){
-            return true;
-        } else if (msg.lastLagTerm() < this.log.get(log.size()-1).term()){
-            return true;
-        } else if (msg.lastLagTerm() == this.log.get(log.size()-1).term()) {
-            if (msg.lastLogIndex() < this.log.size() - 1) {
-                return true;
-            }
+        if (msg.term() < this.currentTerm) return true;
+
+        else if (votedFor != null) return true;
+
+        else if (this.log.size() == 0) return false;
+
+        else if (msg.lastLogTerm() < this.log.get(log.size()-1).term()) return true;
+
+        else if (msg.lastLogTerm() == this.log.get(log.size()-1).term()) {
+            if (msg.lastLogIndex() < this.log.size() - 1) return true;
         }
         return false;
     }

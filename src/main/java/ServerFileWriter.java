@@ -9,14 +9,10 @@ public class ServerFileWriter implements ServerDataManager{
     @Override
     public void saveLog(List<Entry> log) {
         try {
-            File logFile = getLogFile();
-            initializeDataFiles();
-            ObjectOutputStream oos = createObjectOutputStream(logFile);
+            ObjectOutputStream oos = createObjectOutputStream(getLogFile());
             oos.writeObject(log);
             oos.flush();
             oos.close();
-
-
         }catch(IOException e){
             throw new RuntimeException(e);
         }
@@ -24,22 +20,39 @@ public class ServerFileWriter implements ServerDataManager{
 
     @Override
     public void saveCurrentTerm(int term) {
-
+        try {
+            ObjectOutputStream ois = createObjectOutputStream(getCurrentTermFile());
+            ois.writeObject(term);
+            ois.flush();
+            ois.close();
+        } catch(IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public void saveVotedFor(ActorRef<RaftMessage> actorRef) {
-
+        if (actorRef == null){
+            saveVotedForExists(false);
+        } else {
+            try {
+                ObjectOutputStream ois = createObjectOutputStream(getVotedForFile());
+                ois.writeObject(actorRef);
+                ois.flush();
+                ois.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            saveVotedForExists(true);
+        }
     }
+
 
     @Override
     public List<Entry> getLog() {
-        List<Entry> log;
         try {
-            initializeDataFiles();
-            File logFile = getLogFile();
-            ObjectInputStream ois = createObjectInputStream(logFile);
-            log = (ArrayList<Entry>) ois.readObject();
+            ObjectInputStream ois = createObjectInputStream(getLogFile());
+            List<Entry> log = (ArrayList<Entry>) ois.readObject();
             ois.close();
             return log;
         }catch(IOException e){
@@ -51,34 +64,73 @@ public class ServerFileWriter implements ServerDataManager{
 
     @Override
     public int getCurrentTerm() {
-        return 0;
+        try {
+            ObjectInputStream ois = createObjectInputStream(getCurrentTermFile());
+            int term = (int) ois.readObject();
+            ois.close();
+            return term;
+        }catch(IOException e){
+            throw new RuntimeException(e);
+        }catch(ClassNotFoundException e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
     public ActorRef<RaftMessage> getVotedFor() {
-        return null;
+        if (getVotedForExists()) {
+            try {
+                ObjectInputStream ois = createObjectInputStream(getVotedForFile());
+                ActorRef<RaftMessage> votedFor = (ActorRef<RaftMessage>) ois.readObject();
+                ois.close();
+                return votedFor;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            return null;
+        }
     }
 
     @Override
     public void setServerID(int ID) {
         this.serverUID = ID;
+        initializeDataFiles();
     }
 
     private int serverUID;
 
 
     private void initializeDataFiles(){
-        File actorDirectory = getActorDirectory();
+        File actorDirectory = new File(getActorDirectoryPath());
+        File currentTermFile = getCurrentTermFile();
         File logFile = getLogFile();
+        File votedForFile = getVotedForFile();
+        File votedForExistsFile = getVotedForExistsFile();
+
 
         try{
             if(!actorDirectory.exists()){
                 actorDirectory.mkdirs();
             }
+            if (!currentTermFile.exists()){
+                currentTermFile.createNewFile();
+                saveCurrentTerm(0);
+            }
             if (!logFile.exists()) {
                 logFile.createNewFile();
                 saveLog(new ArrayList<Entry>());
             }
+            if (!votedForExistsFile.exists()){
+                votedForExistsFile.createNewFile();
+                saveVotedForExists(false);
+            }
+            if (!votedForFile.exists()){
+                votedForFile.createNewFile();
+            }
+
         } catch(IOException e){
                 throw new RuntimeException(e);
         }
@@ -95,16 +147,48 @@ public class ServerFileWriter implements ServerDataManager{
         return new ObjectInputStream(fis);
     }
 
-
-    private File getActorDirectory(){
+    private String getActorDirectoryPath(){
         String UID = String.valueOf(this.serverUID);
-        String PATH = "./data/" + UID + "/";
-        return new File(PATH);
+        return "./data/" + UID + "/";
+    }
+
+    private File getCurrentTermFile(){
+        return new File(getActorDirectoryPath() + "/term.ser");
     }
     private File getLogFile(){
-        String UID = String.valueOf(this.serverUID);
-        String PATH = "./data/" + UID + "/log.ser";
-        return new File(PATH);
+        return new File(getActorDirectoryPath() + "/log.ser");
+    }
+
+    private File getVotedForFile(){
+        return new File(getActorDirectoryPath() + "/vote.ser");
+    }
+
+    private File getVotedForExistsFile(){
+        return new File(getActorDirectoryPath() + "/voteexists.ser");
+    }
+
+    private void saveVotedForExists(boolean votedForExists) {
+        try {
+            ObjectOutputStream ois = createObjectOutputStream(getVotedForExistsFile());
+            ois.writeObject(votedForExists);
+            ois.flush();
+            ois.close();
+        } catch(IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private boolean getVotedForExists(){
+        try {
+            ObjectInputStream ois = createObjectInputStream(getVotedForExistsFile());
+            boolean votedForExists = (boolean) ois.readObject();
+            ois.close();
+            return votedForExists;
+        }catch(IOException e){
+            throw new RuntimeException(e);
+        }catch(ClassNotFoundException e){
+            throw new RuntimeException(e);
+        }
     }
 
 }
