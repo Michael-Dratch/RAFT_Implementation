@@ -23,6 +23,15 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         ).onFailure(SupervisorStrategy.restart());
     }
 
+// constructor without restart supervision strategy for debugging
+//    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
+//        return Behaviors.setup(context -> {
+//                    return Behaviors.withTimers(timers -> {
+//                        return new Follower(context, timers, dataManager);
+//                    });
+//                });
+//    }
+
 
 
     @Override
@@ -57,6 +66,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         this.log = new ArrayList<Entry>();
 
         dataManager.setServerID(context.getSelf().path().uid());
+        this.log = dataManager.getLog();
     }
 
 
@@ -70,6 +80,9 @@ public class Follower extends AbstractBehavior<RaftMessage> {
                 break;
             case RaftMessage.TestMessage message:
                 handleTestMessage(message);
+                break;
+            case RaftMessage.Failure message:
+                int result = 1/0;
                 break;
             default:
                 break;
@@ -101,32 +114,43 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     }
 
     private void processSuccessfulAppendEntries(RaftMessage.AppendEntries msg) {
+        System.out.println(msg.entries().size());
         int entryCount = msg.entries().size();
 
         for (int i = 0; i < entryCount; i++){
+            System.out.println(entryCount);
+            System.out.println(i);
             if (entryIndexExceedsLogSize(msg, i)){
                 addRemainingEntriesToLog(msg, i);
                 break;
             }
-            if (isConflictBetweenMessageAndLogEntry(msg, i)){
+            else if (isConflictBetweenMessageAndLogEntry(msg, i)){
                 removeConflictingLogEntries(msg.prevLogIndex(), i);
                 addRemainingEntriesToLog(msg, i);
                 break;
             }
         }
         updateCommitIndex(msg);
+        this.dataManager.saveLog(this.log);
     }
 
     private boolean entryIndexExceedsLogSize(RaftMessage.AppendEntries msg, int i) {
-        return msg.prevLogIndex() + i > log.size() - 1;
+        return msg.prevLogIndex() + i > log.size() - 1 || msg.prevLogIndex() + 1 + i >= log.size();
     }
 
     private void addRemainingEntriesToLog(RaftMessage.AppendEntries msg, int i) {
         this.log.addAll(msg.entries().subList(i, msg.entries().size()));
+        this.log = new ArrayList<>(this.log);
     }
 
     private boolean isConflictBetweenMessageAndLogEntry(RaftMessage.AppendEntries msg, int i) {
-        return msg.entries().get(i).term() != this.log.get(msg.prevLogIndex() + i + 1).term();
+        System.out.println("i:");
+        System.out.println(i);
+        System.out.println("prev log index:");
+        System.out.println(msg.prevLogIndex());
+        System.out.println("msg.prevLogIndex() + 1 + i:");
+        System.out.println(msg.prevLogIndex() + 1 + i);
+        return msg.entries().get(i).term() != this.log.get(msg.prevLogIndex() + 1 + i).term();
     }
 
     private void removeConflictingLogEntries(int prevLogIndex, int i) {
@@ -172,6 +196,6 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     }
 
     protected void writeEntriesToLogFile(List<Entry> entries){
-        this.dataManager.saveEntriesToLog(entries);
+        this.dataManager.saveLog(entries);
     }
 }

@@ -1,4 +1,5 @@
 import akka.actor.typed.ActorRef;
+
 import java.util.List;
 
 public interface RaftMessage {
@@ -25,6 +26,8 @@ public interface RaftMessage {
 
     public record HeartBeatTimeOut() implements RaftMessage {}
 
+    public record Failure() implements RaftMessage {}
+
 
 
     public interface TestMessage extends RaftMessage{
@@ -33,7 +36,7 @@ public interface RaftMessage {
                                        ActorRef<RaftMessage> votedFor,
                                        List<Entry> log,
                                        int commitIndex,
-                                       int lastApplied){}
+                                       int lastApplied) implements TestMessage {}
         public record GetCurrentTerm(ActorRef<RaftMessage> sender) implements TestMessage{}
         public record GetCurrentTermResponse(int currentTerm) implements TestMessage {}
         public record GetLog(ActorRef<RaftMessage> sender) implements TestMessage{}
@@ -41,5 +44,6 @@ public interface RaftMessage {
         public record GetCommitIndex(ActorRef<RaftMessage> sender) implements TestMessage {}
         public record GetCommitIndexResponse(int commitIndex) implements TestMessage {}
         public record SaveEntries(List<Entry> entries) implements TestMessage {}
+        public record testFail() implements TestMessage {}
     }
 }

@@ -50,12 +50,17 @@ public class FollowerTests {
     private static void assertCorrectLogResponse(RaftMessage response, List<Entry> expectedLog) {
         if (response instanceof RaftMessage.TestMessage.GetLogResponse){
             RaftMessage.TestMessage.GetLogResponse msg = ( RaftMessage.TestMessage.GetLogResponse) response;
-            assertEquals(expectedLog.size(), msg.log().size());
-            for (int i = 0; i < msg.log().size(); i++){
-                assertTrue(msg.log().get(i).equals(expectedLog.get(i)));
-            }
+            List<Entry> actualLog = msg.log();
+            assertLogsAreEqual(expectedLog, actualLog);
         }else{
             throw new AssertionError("Incorrect Response Message Type");
+        }
+    }
+
+    private static void assertLogsAreEqual(List<Entry> expectedLog, List<Entry> actualLog) {
+        assertEquals(expectedLog.size(), actualLog.size());
+        for (int i = 0; i < actualLog.size(); i++){
+            assertTrue(actualLog.get(i).equals(expectedLog.get(i)));
         }
     }
 
@@ -99,17 +104,19 @@ public class FollowerTests {
         directory.delete();
     }
 
-    private void assertActorLogFileCorrect(List<Entry> entries) {
+    private void assertActorLogFileCorrect(List<Entry> expectedLog) {
         File logFile = getLogFile();
         try {
             FileInputStream fos = new FileInputStream(logFile);
             ObjectInputStream ois = new ObjectInputStream(fos);
-
-            for (Entry e: entries){
-                Entry logEntry = (Entry)ois.readObject();
-                assertTrue(e.equals(logEntry));
-            }
+            List<Entry> log = (List<Entry>)ois.readObject();
             ois.close();
+            assertEquals(expectedLog.size(), log.size());
+
+            for (int i = 0; i < expectedLog.size(); i++){
+                expectedLog.get(i).equals(log.get(i));
+            }
+
         }catch(IOException e){
             throw new RuntimeException(e);
         } catch (ClassNotFoundException e) {
@@ -364,7 +371,7 @@ public class FollowerTests {
     }
 
     @Test
-    public void SuccesfulRequestVoteSenderHasLargerTermFollowerIncreasesCurrentTerm(){
+    public void successfulRequestVoteSenderHasLargerTermFollowerIncreasesCurrentTerm(){
         List<Entry> followerLog = new ArrayList<>();
         followerLog.add(createEntry(1));
         followerLog.add(createEntry(1));
@@ -373,4 +380,40 @@ public class FollowerTests {
         RaftMessage response = inbox.receiveMessage();
         assertCorrectRequestVoteResponse(response, 2, true);
     }
+    
+    @Test
+    public void afterFailureFollowerWithNoLogOrVotedForStillHasNoLogVotedFor(){
+        follower = BehaviorTestKit.create(TestableFollower.create(1, new ArrayList<>(), -1));
+        follower.run(new RaftMessage.TestMessage.testFail());
+        follower.run(new RaftMessage.TestMessage.GetState(inboxRef));
+        RaftMessage response = inbox.receiveMessage();
+        List<Entry> expectedLog = new ArrayList<>();
+        assertCorrectFollowerState(response, expectedLog);
+    }
+
+    @Test
+    public void afterFailureFollowerWithTwoLogEntriesRecoversLog(){
+        follower = BehaviorTestKit.create(Follower.create(new ServerFileWriter()));
+        List<Entry> newEntries = new ArrayList<>();
+        newEntries.add(createEntry(1));
+        newEntries.add(createEntry(1));
+        follower.run(new RaftMessage.AppendEntries(1, inboxRef, -1, -1, newEntries, -1));
+        follower.run(new RaftMessage.Failure());
+        follower.run(new RaftMessage.AppendEntries(1, inboxRef, 1,1, newEntries, -1));
+        List<RaftMessage> responses = inbox.getAllReceived();
+        List<Entry> expectedLog = newEntries;
+        System.out.println("response size");
+        System.out.println(responses.size());
+        assertCorrectFollowerState(responses.get(1), expectedLog);
+    }
+
+    public void assertCorrectFollowerState(RaftMessage response, List<Entry> expectedLog){
+        if (response instanceof RaftMessage.TestMessage.GetStateResponse){
+            RaftMessage.TestMessage.GetStateResponse msg = (RaftMessage.TestMessage.GetStateResponse) response;
+            assertLogsAreEqual(expectedLog, msg.log());
+        }
+    }
+
+    @Test
+    public void afterFailureFollowerWithLogEntriesAndVotedForRecoverLogEntriesAndVotedFor(){}
 }

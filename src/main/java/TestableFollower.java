@@ -1,5 +1,6 @@
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
+import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
@@ -9,12 +10,24 @@ import java.util.List;
 public class TestableFollower extends Follower {
 
     public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log) {
-        return Behaviors.setup(context -> {
-            return Behaviors.withTimers(timers -> {
-                return new TestableFollower(context, timers, currentTerm, log);
-            });
-        });
+        return Behaviors.<RaftMessage>supervise(
+            Behaviors.setup(context -> {
+                return Behaviors.withTimers(timers -> {
+                    return new TestableFollower(context, timers, currentTerm, log);
+                });
+            })).onFailure(SupervisorStrategy.restart());
+
     }
+
+    // constructor without restart supervision strategy for debugging
+//        public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log) {
+//        return Behaviors.setup(context -> {
+//                return Behaviors.withTimers(timers -> {
+//                    return new TestableFollower(context, timers, currentTerm, log);
+//                });
+//            });
+//
+//    }
 
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log) {
         super(context, timers, new ServerFileWriter());
@@ -24,11 +37,12 @@ public class TestableFollower extends Follower {
     }
 
     public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log, int commitIndex) {
-        return Behaviors.setup(context -> {
-            return Behaviors.withTimers(timers -> {
-                return new TestableFollower(context, timers, currentTerm, log, commitIndex);
-            });
-        });
+        return Behaviors.<RaftMessage>supervise(
+            Behaviors.setup(context -> {
+                return Behaviors.withTimers(timers -> {
+                    return new TestableFollower(context, timers, currentTerm, log, commitIndex);
+                });
+            })).onFailure(SupervisorStrategy.restart());
     }
 
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log, int commitIndex) {
@@ -41,12 +55,14 @@ public class TestableFollower extends Follower {
     }
 
     public static Behavior<RaftMessage> create(int currentTerm, ActorRef<RaftMessage> votedFor, List<Entry> log, int commitIndex, int lastApplied) {
-        return Behaviors.setup(context -> {
-            return Behaviors.withTimers(timers -> {
-                return new TestableFollower(context, timers, currentTerm, votedFor, log, commitIndex, lastApplied);
-            });
-        });
+        return Behaviors.<RaftMessage>supervise(
+            Behaviors.setup(context -> {
+                return Behaviors.withTimers(timers -> {
+                    return new TestableFollower(context, timers, currentTerm, votedFor, log, commitIndex, lastApplied);
+                });
+        })).onFailure(SupervisorStrategy.restart());
     }
+
 
     private TestableFollower(ActorContext<RaftMessage> context,
                              TimerScheduler<RaftMessage> timers,
@@ -74,7 +90,18 @@ public class TestableFollower extends Follower {
                 msg.sender().tell(new RaftMessage.TestMessage.GetCommitIndexResponse(this.commitIndex));
                 break;
             case RaftMessage.TestMessage.SaveEntries msg:
-                this.dataManager.saveEntriesToLog(msg.entries());
+                this.dataManager.saveLog(msg.entries());
+                break;
+            case RaftMessage.TestMessage.GetState msg:
+                msg.sender().tell(new RaftMessage.TestMessage.GetStateResponse(this.currentTerm,
+                                                                                this.votedFor,
+                                                                                this.log,
+                                                                                this.commitIndex,
+                                                                                this.lastApplied));
+                break;
+            case RaftMessage.TestMessage.testFail msg:
+                int failure = 1/0;
+                break;
             default:
                 break;
         }
