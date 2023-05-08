@@ -1,6 +1,4 @@
 import akka.actor.typed.ActorRef;
-
-import java.util.HashMap;
 import java.util.List;
 
 public interface RaftMessage {
@@ -28,7 +26,16 @@ public interface RaftMessage {
     public record HeartBeatTimeOut() implements RaftMessage {}
 
 
+
     public interface TestMessage extends RaftMessage{
+        public record GetState(ActorRef<RaftMessage> sender) implements TestMessage{}
+        public record GetStateResponse(int currentTerm,
+                                       ActorRef<RaftMessage> votedFor,
+                                       List<Entry> log,
+                                       int commitIndex,
+                                       int lastApplied){}
+        public record GetCurrentTerm(ActorRef<RaftMessage> sender) implements TestMessage{}
+        public record GetCurrentTermResponse(int currentTerm) implements TestMessage {}
         public record GetLog(ActorRef<RaftMessage> sender) implements TestMessage{}
         public record GetLogResponse(List<Entry> log) implements TestMessage{}
         public record GetCommitIndex(ActorRef<RaftMessage> sender) implements TestMessage {}

@@ -1,20 +1,19 @@
-import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
 import akka.actor.testkit.typed.javadsl.BehaviorTestKit;
 import akka.actor.testkit.typed.javadsl.TestInbox;
 import akka.actor.typed.ActorRef;
-import org.junit.Assert.*;
+import org.junit.After;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.engine.discovery.predicates.IsPotentialTestContainer;
 
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-public class FollowerTest {
+public class FollowerTests {
     BehaviorTestKit<RaftMessage> follower;
 
     TestInbox<RaftMessage> inbox;
@@ -26,6 +25,16 @@ public class FollowerTest {
             assertEquals(expectedSuccess, msg.success());
             assertEquals(expectedTerm, msg.term());
         }else{
+            throw new AssertionError("Incorrect Response Message Type");
+        }
+    }
+
+    private void assertCorrectRequestVoteResponse(RaftMessage response, int expectedTerm, boolean expectedVoteGranted){
+        if (response instanceof RaftMessage.RequestVoteResponse){
+            RaftMessage.RequestVoteResponse msg = (RaftMessage.RequestVoteResponse) response;
+            assertEquals(expectedTerm, msg.term());
+            assertEquals(expectedVoteGranted, msg.voteGranted());
+        } else {
             throw new AssertionError("Incorrect Response Message Type");
         }
     }
@@ -63,10 +72,71 @@ public class FollowerTest {
         return new Entry(term, new StringCommand(0, 0, ""));
     }
 
+    private void deleteActorDirectory() {
+        File actorDirectory = getActorDirectory();
+        if (actorDirectory.exists()){
+            deleteDirectory(actorDirectory);
+        }
+    }
+
+    private void clearDataDirectory(){
+        File dataDir = new File("./data/");
+        File[] contents = dataDir.listFiles();
+        if (contents != null) {
+            for (File file : contents) {
+                deleteDirectory(file);
+            }
+        }
+    }
+
+    private void deleteDirectory(File directory){
+        File[] contents = directory.listFiles();
+        if (contents != null){
+            for (File file : contents){
+                deleteDirectory(file);
+            }
+        }
+        directory.delete();
+    }
+
+    private void assertActorLogFileCorrect(List<Entry> entries) {
+        File logFile = getLogFile();
+        try {
+            FileInputStream fos = new FileInputStream(logFile);
+            ObjectInputStream ois = new ObjectInputStream(fos);
+
+            for (Entry e: entries){
+                Entry logEntry = (Entry)ois.readObject();
+                assertTrue(e.equals(logEntry));
+            }
+            ois.close();
+        }catch(IOException e){
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private File getLogFile() {
+        String logPath = "./data/" + follower.getRef().path().uid() + "/log.ser";
+        return new File(logPath);
+    }
+
+    private File getActorDirectory() {
+        String path = "./data/" + follower.getRef().path().uid() + "/";
+        return new File(path);
+    }
+
     @Before
     public void setUp(){
         inbox = TestInbox.create();
         inboxRef = inbox.getRef();
+    }
+
+    @After
+    public void tearDown(){
+        clearDataDirectory();
+
     }
 
     @Test
@@ -80,7 +150,7 @@ public class FollowerTest {
 
     @Test
     public void FollowerHasNoEntryAtPrevLogIndexReturnsFalse(){
-        follower = BehaviorTestKit.create(Follower.create());
+        follower = BehaviorTestKit.create(Follower.create(new ServerFileWriter()));
         follower.run(new RaftMessage.AppendEntries(0, inboxRef, 1, 0, new ArrayList<Entry>(), 0));
         assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 0, false);
     }
@@ -93,6 +163,26 @@ public class FollowerTest {
         follower.run(new RaftMessage.AppendEntries(3, inboxRef, 0, 2, new ArrayList<Entry>(), 0));
         assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 3, false);
     }
+
+    @Test
+    public void FollowerUpdatesCurrentTermIfFalseAppendEntriesHasLargerTerm(){
+        List<Entry> followerLog = new ArrayList<Entry>();
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(0, inboxRef, followerLog, -1, -1));
+        follower.run(new RaftMessage.AppendEntries(1, inboxRef, 0, 0, new ArrayList<Entry>(), 0));
+        assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 1, false);
+    }
+
+    @Test
+    public void FollowerUpdatesCurrentTermIfTrueAppendEntriesHasLargerTerm(){
+        List<Entry> followerLog = new ArrayList<Entry>();
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(0, inboxRef, followerLog, -1, -1));
+        follower.run(new RaftMessage.AppendEntries(1, inboxRef, 0, 1, new ArrayList<Entry>(), 0));
+        assertCorrectAppendEntriesResponse(inbox.receiveMessage(), 1, true);
+    }
+
+
 
     @Test
     public void testCorrectSuccessMessageReturnedFromSuccessfulAppendEntries(){
@@ -218,57 +308,69 @@ public class FollowerTest {
     public void testCreateLogFileAndSaveEntries(){
         List<Entry> entries = new ArrayList<>();
         entries.add(createEntry(1));
-
         follower = BehaviorTestKit.create(TestableFollower.create(3, new ArrayList<>(), -1));
         follower.run(new RaftMessage.TestMessage.SaveEntries(entries));
         assertActorLogFileCorrect(entries);
-
-        deleteActorDirectory();
     }
 
-
-    private void deleteActorDirectory() {
-        File actorDirectory = getActorDirectory();
-        if (actorDirectory.exists()){
-            deleteDirectory(actorDirectory);
-        }
+    @Test
+    public void followerRespondsFalseToRequestVoteWhereTermIsLessThanFollowerTerm(){
+        follower = BehaviorTestKit.create(TestableFollower.create(2, new ArrayList<>(), -1));
+        follower.run(new RaftMessage.RequestVote(1, inboxRef, 0,0));
+        RaftMessage response = inbox.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 2, false);
     }
 
-    private void deleteDirectory(File directory){
-        File[] contents = directory.listFiles();
-        if (contents != null){
-            for (File file : contents){
-                deleteDirectory(file);
-            }
-        }
-        directory.delete();
+    @Test
+    public void requestVoteHasSmallerLastLogTermFollowerReturnsFalse(){
+        List<Entry> followerLog = new ArrayList<>();
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, followerLog, -1));
+        follower.run(new RaftMessage.RequestVote(1, inboxRef, 0,0));
+        RaftMessage response = inbox.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 1, false);
     }
 
-    private void assertActorLogFileCorrect(List<Entry> entries) {
-        File logFile = getLogFile();
-        try {
-            FileInputStream fos = new FileInputStream(logFile);
-            ObjectInputStream ois = new ObjectInputStream(fos);
-
-            for (Entry e: entries){
-                Entry logEntry = (Entry)ois.readObject();
-                assertTrue(e.equals(logEntry));
-            }
-            ois.close();
-        }catch(IOException e){
-            throw new RuntimeException(e);
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        }
+    @Test
+    public void requestVoteHasSameLastLogTermButSmallerLastLogIndexFollowerReturnsFalse(){
+        List<Entry> followerLog = new ArrayList<>();
+        followerLog.add(createEntry(1));
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, followerLog, -1));
+        follower.run(new RaftMessage.RequestVote(1, inboxRef, 0,1));
+        RaftMessage response = inbox.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 1, false);
     }
 
-    private File getLogFile() {
-        String logPath = "./data/" + follower.getRef().path().uid() + "/log.ser";
-        return new File(logPath);
+    @Test
+    public void requestVotHasSmallerLastLogIndexButLargerLastLogTermFollowerGrantsVote(){
+        List<Entry> followerLog = new ArrayList<>();
+        followerLog.add(createEntry(1));
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, followerLog, -1));
+        follower.run(new RaftMessage.RequestVote(1, inboxRef, 0,2));
+        RaftMessage response = inbox.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 1, true);
     }
 
-    private File getActorDirectory() {
-        String path = "./data/" + follower.getRef().path().uid() + "/";
-        return new File(path);
+    @Test
+    public void failedRequestVoteButSenderHasLargerTermFollowerIncreasesCurrentTerm(){
+        List<Entry> followerLog = new ArrayList<>();
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, followerLog, -1));
+        follower.run(new RaftMessage.RequestVote(2, inboxRef, 0,0));
+        RaftMessage response = inbox.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 2, false);
+    }
+
+    @Test
+    public void SuccesfulRequestVoteSenderHasLargerTermFollowerIncreasesCurrentTerm(){
+        List<Entry> followerLog = new ArrayList<>();
+        followerLog.add(createEntry(1));
+        followerLog.add(createEntry(1));
+        follower = BehaviorTestKit.create(TestableFollower.create(1, followerLog, -1));
+        follower.run(new RaftMessage.RequestVote(2, inboxRef, 0,2));
+        RaftMessage response = inbox.receiveMessage();
+        assertCorrectRequestVoteResponse(response, 2, true);
     }
 }

@@ -10,4 +10,5 @@ public interface ServerDataManager {
     public List<Entry> getLog();
     public int getCurrentTerm();
     public ActorRef<RaftMessage> getVotedFor();
+    public void setServerID(int ID);
 }

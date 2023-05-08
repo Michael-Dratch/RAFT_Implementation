@@ -8,12 +8,21 @@ import java.util.List;
 
 public class ServerFileWriter implements ServerDataManager{
 
-    public ServerFileWriter(int serverUID){
-        this.serverUID = serverUID;
-    }
     @Override
     public void saveEntriesToLog(List<Entry> entries) {
+        try {
+            File logFile = getLogFile();
+            initializeFileIfNotExist(logFile);
+            ObjectOutputStream oos = createObjectInputStream(logFile);
 
+            for (Entry e: entries){
+                oos.writeObject(e);
+            }
+
+            oos.close();
+        }catch(IOException e){
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -41,6 +50,11 @@ public class ServerFileWriter implements ServerDataManager{
         return null;
     }
 
+    @Override
+    public void setServerID(int ID) {
+        this.serverUID = ID;
+    }
+
     private int serverUID;
 
 
@@ -62,21 +76,6 @@ public class ServerFileWriter implements ServerDataManager{
 
     }
 
-    private void writeEntriesToFile(List<Entry> entries){
-        try {
-            File logFile = getLogFile();
-            initializeFileIfNotExist(logFile);
-            ObjectOutputStream oos = createObjectInputStream(logFile);
-
-            for (Entry e: entries){
-                oos.writeObject(e);
-            }
-
-            oos.close();
-        }catch(IOException e){
-            throw new RuntimeException(e);
-        }
-    }
 
     private static ObjectOutputStream createObjectInputStream(File logFile) throws IOException {
         FileOutputStream fos = new FileOutputStream(logFile);
