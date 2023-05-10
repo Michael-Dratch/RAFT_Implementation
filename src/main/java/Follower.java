@@ -16,11 +16,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
 
     public static Behavior<RaftMessage> create(ServerDataManager dataManager){
         return Behaviors.<RaftMessage>supervise(
-            Behaviors.setup(context -> {
-                return Behaviors.withTimers(timers -> {
-                    return new Follower(context, timers, dataManager);
-                });
-            })
+            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager)))
         ).onFailure(SupervisorStrategy.restart());
     }
 
@@ -77,6 +73,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     }
 
     private void initializeState(ServerDataManager dataManager) {
+        this.currentTerm = dataManager.getCurrentTerm();
         this.votedFor = dataManager.getVotedFor();
         if (this.votedFor.equals(getContext().getSystem().deadLetters())){
             this.votedFor = null;
@@ -97,8 +94,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
                 handleTestMessage(message);
                 break;
             case RaftMessage.Failure message:   // Used to simulate node failure
-                int result = 1/0;
-                break;
+                throw new RuntimeException("Test Failure");
             default:
                 break;
         }
@@ -118,6 +114,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
 
     private void updateCurrentTerm(int senderTerm) {
         if (senderTerm > this.currentTerm){this.currentTerm = senderTerm;}
+        this.dataManager.saveCurrentTerm(this.currentTerm);
     }
 
     private boolean doesAppendEntriesFail(RaftMessage.AppendEntries msg) {

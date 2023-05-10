@@ -3,6 +3,8 @@ import akka.actor.testkit.typed.javadsl.BehaviorTestKit;
 import akka.actor.testkit.typed.javadsl.TestInbox;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.SupervisorStrategy;
+import akka.actor.typed.javadsl.Behaviors;
 import org.junit.After;
 
 import org.junit.Before;
@@ -161,8 +163,6 @@ public class FollowerTests {
         testKit = ActorTestKit.create();
         probe = testKit.createTestProbe();
         probeRef = probe.ref();
-//        inbox = TestInbox.create();
-//        inboxRef = inbox.getRef();
     }
 
     @After
@@ -410,7 +410,7 @@ public class FollowerTests {
     @Test
     public void afterFailureFollowerWithNoLogOrVotedForStillHasNoLogVotedFor(){
         follower = testKit.spawn(TestableFollower.create(1, new ArrayList<>(), -1));
-        follower.tell(new RaftMessage.TestMessage.testFail());
+        follower.tell(new RaftMessage.Failure());
         follower.tell(new RaftMessage.TestMessage.GetState(probeRef));
         RaftMessage response = probe.receiveMessage();
         List<Entry> expectedLog = new ArrayList<>();
@@ -418,34 +418,35 @@ public class FollowerTests {
     }
 
     @Test
-    public void afterFailureFollowerWithTwoLogEntriesRecoversLog() {
-        follower = testKit.spawn(Follower.create(new ServerFileWriter()));
+    public void afterFailureFollowerWithTwoLogEntriesRecoversLog() throws InterruptedException {
+        follower = testKit.spawn(TestableFollower.create(0, new ArrayList<>()));
         List<Entry> newEntries = new ArrayList<>();
         newEntries.add(createEntry(1));
         newEntries.add(createEntry(1));
         follower.tell(new RaftMessage.AppendEntries(1, probeRef, -1, -1, newEntries, -1));
         follower.tell(new RaftMessage.Failure());
-        follower.tell(new RaftMessage.AppendEntries(1, probeRef, 1, 1, newEntries, -1));
+        follower.tell(new RaftMessage.TestMessage.GetState(probeRef));
         List<RaftMessage> responses = probe.receiveSeveralMessages(2);
         List<Entry> expectedLog = newEntries;
-        System.out.println("response size");
-        System.out.println(responses.size());
-        assertCorrectFollowerState(responses.get(1), expectedLog, probeRef);
+        assertCorrectFollowerState(responses.get(1), expectedLog, null);
     }
     @Test
     public void afterFailureFollowerWithVotedForRecoversVotedFor(){
-        ActorTestKit testKit = ActorTestKit.create();
-        ActorRef<RaftMessage> node = testKit.spawn(Follower.create(new ServerFileWriter()));
-        TestProbe<RaftMessage> probe = testKit.createTestProbe();
-
-        node.tell(new RaftMessage.RequestVote(1, probe.ref(), 1, 1));
+        follower = testKit.spawn(Follower.create(new ServerFileWriter()));
+        follower.tell(new RaftMessage.RequestVote(1, probe.ref(), 1, 1));
         probe.expectMessage(new RaftMessage.RequestVoteResponse(1, true));
-        node.tell(new RaftMessage.Failure());
-        node.tell(new RaftMessage.RequestVote(1, probe.ref(), 1, 1));
+        follower.tell(new RaftMessage.Failure());
+        follower.tell(new RaftMessage.RequestVote(1, probe.ref(), 1, 1));
         probe.expectMessage(new RaftMessage.RequestVoteResponse(1, false));
+    }
 
-        testKit.shutdownTestKit();
-
-
+    @Test
+    public void afterFailureFollowerRecoversTerm(){
+        follower = testKit.spawn(TestableFollower.create());
+        follower.tell(new RaftMessage.AppendEntries(2, probeRef, -1, -1, new ArrayList<>(), -1));
+        follower.tell(new RaftMessage.Failure());
+        follower.tell(new RaftMessage.TestMessage.GetState(probeRef));
+        RaftMessage.TestMessage.GetStateResponse response = (RaftMessage.TestMessage.GetStateResponse) probe.receiveSeveralMessages(2).get(1);
+        assertEquals(2, response.currentTerm());
     }
 }
