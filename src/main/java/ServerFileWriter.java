@@ -45,10 +45,19 @@ public class ServerFileWriter implements ServerDataManager{
         }
     }
 
-    private VotedForWrapper getVotedForWrapper(ActorRef<RaftMessage> actorRef) {
-        if (actorRef == null) return new VotedForWrapper(null);
-        else return new VotedForWrapper(this.refResolver.toSerializationFormat(actorRef));
+    @Override
+    public void saveGroupRefs(List<ActorRef<RaftMessage>> groupRefs){
+        try {
+            List<String> serializableRefs = getSerializableRefs(groupRefs);
+            ObjectOutputStream ois = createObjectOutputStream(getGroupRefFile());
+            ois.writeObject(serializableRefs);
+            ois.flush();
+            ois.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
+
 
 
     @Override
@@ -95,6 +104,24 @@ public class ServerFileWriter implements ServerDataManager{
     }
 
     @Override
+    public List<ActorRef<RaftMessage>> getGroupRefs() {
+        try {
+            ObjectInputStream ois = createObjectInputStream(getGroupRefFile());
+            List<String> serializableRefs = (List<String>) ois.readObject();
+            ois.close();
+            List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
+            for (String refString: serializableRefs){
+                groupRefs.add(this.refResolver.resolveActorRef(refString));
+            }
+            return groupRefs;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
     public void setServerID(int ID) {
         this.serverUID = ID;
         initializeDataFiles();
@@ -107,7 +134,21 @@ public class ServerFileWriter implements ServerDataManager{
     }
 
     private int serverUID;
+
     private ActorRefResolver refResolver;
+
+    private VotedForWrapper getVotedForWrapper(ActorRef<RaftMessage> actorRef) {
+        if (actorRef == null) return new VotedForWrapper(null);
+        else return new VotedForWrapper(this.refResolver.toSerializationFormat(actorRef));
+    }
+
+    private List<String> getSerializableRefs(List<ActorRef<RaftMessage>> groupRefs) {
+        List<String> serializableRefs = new ArrayList<>();
+        for (ActorRef<RaftMessage> ref : groupRefs){
+            serializableRefs.add(this.refResolver.toSerializationFormat(ref));
+        }
+        return serializableRefs;
+    }
 
 
     private void initializeDataFiles(){
@@ -115,6 +156,7 @@ public class ServerFileWriter implements ServerDataManager{
         File currentTermFile = getCurrentTermFile();
         File logFile = getLogFile();
         File votedForFile = getVotedForFile();
+        File groupRefFile = getGroupRefFile();
 
         try{
             if(!actorDirectory.exists()){
@@ -131,6 +173,11 @@ public class ServerFileWriter implements ServerDataManager{
             if (!votedForFile.exists()){
                 votedForFile.createNewFile();
                 saveVotedFor(null);
+            }
+            if (!groupRefFile.exists()){
+                groupRefFile.createNewFile();
+                saveGroupRefs(new ArrayList<>());
+
             }
 
         } catch(IOException e){
@@ -163,6 +210,10 @@ public class ServerFileWriter implements ServerDataManager{
 
     private File getVotedForFile(){
         return new File(getActorDirectoryPath() + "/vote.ser");
+    }
+
+    private File getGroupRefFile(){
+        return new File(getActorDirectoryPath() + "/group.ser");
     }
 
 //    private File getVotedForExistsFile(){

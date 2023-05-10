@@ -1,41 +1,22 @@
-import akka.actor.typed.ActorRef;
-import akka.actor.typed.ActorRefResolver;
-import akka.actor.typed.Behavior;
-import akka.actor.typed.SupervisorStrategy;
+import akka.actor.TypedActor;
+import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static java.lang.Math.min;
 
 
-
-
-public class Follower extends AbstractBehavior<RaftMessage> {
+public class Follower extends RaftServer {
 
     public static Behavior<RaftMessage> create(ServerDataManager dataManager){
         return Behaviors.<RaftMessage>supervise(
-            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, 0)))
+            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager)))
         ).onFailure(SupervisorStrategy.restart());
     }
-
-    public static Behavior<RaftMessage> create(ServerDataManager dataManager, int currentTerm){
-        return Behaviors.<RaftMessage>supervise(
-                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, currentTerm)))
-        ).onFailure(SupervisorStrategy.restart());
-    }
-
-// constructor without restart supervision strategy for debugging
-//    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
-//        return Behaviors.setup(context -> {
-//                    return Behaviors.withTimers(timers -> {
-//                        return new Follower(context, timers, dataManager);
-//                    });
-//                });
-//    }
-
 
 
     @Override
@@ -45,74 +26,9 @@ public class Follower extends AbstractBehavior<RaftMessage> {
                 .build();
     }
 
-    protected TimerScheduler<RaftMessage> timer;
-
-    private static final Object TIMER_KEY = new Object();
-
-    protected ServerDataManager dataManager;
-
-    protected List<ActorRef<RaftMessage>> groupRefs;
-
-    protected int currentTerm;
-
-    protected ActorRef<RaftMessage> votedFor;
-
-    protected List<Entry> log;
-
-    protected int commitIndex;
-
-    protected int lastApplied;
 
     protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager){
-        super(context);
-        this.timer = timers;
-        this.dataManager = dataManager;
-        this.commitIndex = -1;
-        this.lastApplied = -1;
-        this.currentTerm = 0;
-        this.votedFor = null;
-        this.log = new ArrayList<Entry>();
-
-        initializeDataManager(context, dataManager);
-        initializeState(dataManager);
-    }
-
-    protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager, int currentTerm){
-        super(context);
-        this.timer = timers;
-        this.dataManager = dataManager;
-        this.commitIndex = -1;
-        this.lastApplied = -1;
-        this.currentTerm = currentTerm;
-        this.votedFor = null;
-        this.log = new ArrayList<Entry>();
-
-        initializeDataManager(context, dataManager);
-        initializeState(dataManager, currentTerm);
-    }
-
-    private void initializeDataManager(ActorContext<RaftMessage> context, ServerDataManager dataManager) {
-        dataManager.setActorRefResolver(ActorRefResolver.get(context.getSystem()));
-        dataManager.setServerID(context.getSelf().path().uid());
-        System.out.println(ActorRefResolver.get(context.getSystem()));
-    }
-
-    private void initializeState(ServerDataManager dataManager) {
-        this.currentTerm = dataManager.getCurrentTerm();
-        this.votedFor = dataManager.getVotedFor();
-        if (this.votedFor.equals(getContext().getSystem().deadLetters())){
-            this.votedFor = null;
-        }
-        this.log = dataManager.getLog();
-    }
-
-    private void initializeState(ServerDataManager dataManager, int currentTerm) {
-        this.dataManager.saveCurrentTerm(currentTerm);
-        this.votedFor = dataManager.getVotedFor();
-        if (this.votedFor.equals(getContext().getSystem().deadLetters())){
-            this.votedFor = null;
-        }
-        this.log = dataManager.getLog();
+        super(context, timers, dataManager, -1,-1);
     }
 
 
@@ -131,8 +47,8 @@ public class Follower extends AbstractBehavior<RaftMessage> {
                 handleRequestVote(msg);
                 break;
             case RaftMessage.TimeOut msg:
-                //return new Candadite.create();
-                break;
+                handleTimeOut();
+                return Candidate.create(this.dataManager,this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
             case RaftMessage.TestMessage msg:
                 handleTestMessage(msg);
                 break;
@@ -143,11 +59,6 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         }
         return this;
     }
-
-    private void startTimer() {
-        this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(200));
-    }
-
 
     private void handleAppendEntries(RaftMessage.AppendEntries msg){
         updateCurrentTerm(msg.term());
@@ -160,16 +71,12 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         }
     }
 
-    private void updateCurrentTerm(int senderTerm) {
-        if (senderTerm > this.currentTerm){this.currentTerm = senderTerm;}
-        this.dataManager.saveCurrentTerm(this.currentTerm);
-    }
-
     private boolean doesAppendEntriesFail(RaftMessage.AppendEntries msg) {
-        if (msg.term() < this.currentTerm){return true;}
-        else if (msg.prevLogIndex() == -1){return false;}
-        else if (this.log.size() < msg.prevLogIndex()){return true;}
-        else if(this.log.get(msg.prevLogIndex()).term() != msg.prevLogTerm()){return true;}
+        if (msg.term() < this.currentTerm) return true;
+        else if (msg.prevLogIndex() == -1) return false;
+        else if (this.log.size() < msg.prevLogIndex()) return true;
+        if (this.log.size() < 1) return false;
+        else if(this.log.get(msg.prevLogIndex()).term() != msg.prevLogTerm()) return true;
         return false;
     }
 
@@ -245,7 +152,6 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     private void returnRequestVoteResponse(RaftMessage.RequestVote msg, boolean voteGranted) {
         msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, voteGranted));
     }
-
 
     protected void handleTestMessage(RaftMessage.TestMessage msg){
         //implemented in TestableFollower Class

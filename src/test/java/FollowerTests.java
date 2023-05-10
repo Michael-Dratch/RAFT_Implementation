@@ -17,9 +17,6 @@ import static org.junit.Assert.assertTrue;
 public class FollowerTests {
     ActorRef<RaftMessage> follower;
 
-//    TestInbox<RaftMessage> inbox;
-//    ActorRef<RaftMessage> inboxRef;
-
     static ActorTestKit testKit;
 
     TestProbe<RaftMessage> probe;
@@ -448,10 +445,13 @@ public class FollowerTests {
     public void afterFailureFollowerRecoversTerm(){
         follower = testKit.spawn(TestableFollower.create());
         follower.tell(new RaftMessage.AppendEntries(2, probeRef, -1, -1, new ArrayList<>(), -1));
+        follower.tell(new RaftMessage.TestMessage.GetState(probeRef));
+        RaftMessage.TestMessage.GetStateResponse beforeFailure = (RaftMessage.TestMessage.GetStateResponse) probe.receiveSeveralMessages(2).get(1);
         follower.tell(new RaftMessage.Failure());
         follower.tell(new RaftMessage.TestMessage.GetState(probeRef));
-        RaftMessage.TestMessage.GetStateResponse response = (RaftMessage.TestMessage.GetStateResponse) probe.receiveSeveralMessages(2).get(1);
-        assertEquals(2, response.currentTerm());
+        RaftMessage.TestMessage.GetStateResponse afterFailure = (RaftMessage.TestMessage.GetStateResponse) probe.receiveMessage();
+        assertEquals(2, beforeFailure.currentTerm());
+        assertEquals(2, afterFailure.currentTerm());
     }
 
     @Test

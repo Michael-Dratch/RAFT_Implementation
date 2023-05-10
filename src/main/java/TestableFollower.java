@@ -43,9 +43,11 @@ public class TestableFollower extends Follower {
 //    }
 
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log) {
-        super(context, timers, new ServerFileWriter(), currentTerm);
+        super(context, timers, new ServerFileWriter());
         this.timer = timers;
         this.log = log;
+        this.currentTerm = currentTerm;
+        this.dataManager.saveCurrentTerm(this.currentTerm);
     }
 
     public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log, int commitIndex) {
@@ -65,11 +67,12 @@ public class TestableFollower extends Follower {
 //                });
 //    }
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log, int commitIndex) {
-
-        super(context, timers, new ServerFileWriter(), currentTerm);
-        this.timer = timers;
+        super(context, timers, new ServerFileWriter());
+        this.currentTerm = currentTerm;
+        this.dataManager.saveCurrentTerm(this.currentTerm);
         this.commitIndex = commitIndex;
         this.log = log;
+        this.dataManager.saveLog(log);
     }
 
     public static Behavior<RaftMessage> create(int currentTerm, ActorRef<RaftMessage> votedFor, List<Entry> log, int commitIndex, int lastApplied) {
@@ -90,12 +93,16 @@ public class TestableFollower extends Follower {
                              int commitIndex,
                              int lastApplied) {
 
-        super(context, timers, new ServerFileWriter(), currentTerm);
+        super(context, timers, new ServerFileWriter());
         this.timer = timers;
-        this.votedFor = votedFor;
-        this.log = log;
         this.commitIndex = commitIndex;
         this.lastApplied = lastApplied;
+        this.log = log;
+        this.dataManager.saveLog(this.log);
+        this.currentTerm = currentTerm;
+        this.dataManager.saveCurrentTerm(this.currentTerm);
+        this.votedFor = votedFor;
+        this.dataManager.saveVotedFor(votedFor);
     }
 
     protected void handleTestMessage(RaftMessage.TestMessage message) {
