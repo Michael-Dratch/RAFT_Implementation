@@ -36,22 +36,22 @@ public class TestableFollower extends Follower {
         this.log = log;
     }
 
-    public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log, int commitIndex) {
-        return Behaviors.<RaftMessage>supervise(
-            Behaviors.setup(context -> {
-                return Behaviors.withTimers(timers -> {
-                    return new TestableFollower(context, timers, currentTerm, log, commitIndex);
-                });
-            })).onFailure(SupervisorStrategy.restart());
-    }
-
 //    public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log, int commitIndex) {
-//        return Behaviors.setup(context -> {
-//                    return Behaviors.withTimers(timers -> {
-//                        return new TestableFollower(context, timers, currentTerm, log, commitIndex);
-//                    });
+//        return Behaviors.<RaftMessage>supervise(
+//            Behaviors.setup(context -> {
+//                return Behaviors.withTimers(timers -> {
+//                    return new TestableFollower(context, timers, currentTerm, log, commitIndex);
 //                });
+//            })).onFailure(SupervisorStrategy.restart());
 //    }
+
+    public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log, int commitIndex) {
+        return Behaviors.setup(context -> {
+                    return Behaviors.withTimers(timers -> {
+                        return new TestableFollower(context, timers, currentTerm, log, commitIndex);
+                    });
+                });
+    }
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log, int commitIndex) {
 
         super(context, timers, new ServerFileWriter());

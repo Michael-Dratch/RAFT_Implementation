@@ -1,4 +1,5 @@
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorRefResolver;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.*;
@@ -13,24 +14,24 @@ import static java.lang.Math.min;
 
 public class Follower extends AbstractBehavior<RaftMessage> {
 
-    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
-        return Behaviors.<RaftMessage>supervise(
-            Behaviors.setup(context -> {
-                return Behaviors.withTimers(timers -> {
-                    return new Follower(context, timers, dataManager);
-                });
-            })
-        ).onFailure(SupervisorStrategy.restart());
-    }
+//    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
+//        return Behaviors.<RaftMessage>supervise(
+//            Behaviors.setup(context -> {
+//                return Behaviors.withTimers(timers -> {
+//                    return new Follower(context, timers, dataManager);
+//                });
+//            })
+//        ).onFailure(SupervisorStrategy.restart());
+//    }
 
 // constructor without restart supervision strategy for debugging
-//    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
-//        return Behaviors.setup(context -> {
-//                    return Behaviors.withTimers(timers -> {
-//                        return new Follower(context, timers, dataManager);
-//                    });
-//                });
-//    }
+    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
+        return Behaviors.setup(context -> {
+                    return Behaviors.withTimers(timers -> {
+                        return new Follower(context, timers, dataManager);
+                    });
+                });
+    }
 
 
 
@@ -65,7 +66,18 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         this.votedFor = null;
         this.log = new ArrayList<Entry>();
 
+        initializeDataManager(context, dataManager);
+        initializeState(dataManager);
+    }
+
+    private void initializeDataManager(ActorContext<RaftMessage> context, ServerDataManager dataManager) {
+        dataManager.setActorRefResolver(ActorRefResolver.get(context.getSystem()));
         dataManager.setServerID(context.getSelf().path().uid());
+        System.out.println(ActorRefResolver.get(context.getSystem()));
+        System.out.println("finished initializing data manager");
+    }
+
+    private void initializeState(ServerDataManager dataManager) {
         this.votedFor = dataManager.getVotedFor();
         this.log = dataManager.getLog();
     }

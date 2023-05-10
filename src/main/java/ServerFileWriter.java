@@ -1,4 +1,6 @@
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorRefResolver;
+import akka.actor.typed.ActorSystem;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -32,19 +34,20 @@ public class ServerFileWriter implements ServerDataManager{
 
     @Override
     public void saveVotedFor(ActorRef<RaftMessage> actorRef) {
-        if (actorRef == null){
-            saveVotedForExists(false);
-        } else {
-            try {
-                ObjectOutputStream ois = createObjectOutputStream(getVotedForFile());
-                ois.writeObject(actorRef);
-                ois.flush();
-                ois.close();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            saveVotedForExists(true);
+        try {
+            VotedForWrapper votedFor = getVotedForWrapper(actorRef);
+            ObjectOutputStream ois = createObjectOutputStream(getVotedForFile());
+            ois.writeObject(votedFor);
+            ois.flush();
+            ois.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
+    }
+
+    private VotedForWrapper getVotedForWrapper(ActorRef<RaftMessage> actorRef) {
+        if (actorRef == null) return new VotedForWrapper(null);
+        else return new VotedForWrapper(this.refResolver.toSerializationFormat(actorRef));
     }
 
 
@@ -78,19 +81,16 @@ public class ServerFileWriter implements ServerDataManager{
 
     @Override
     public ActorRef<RaftMessage> getVotedFor() {
-        if (getVotedForExists()) {
-            try {
-                ObjectInputStream ois = createObjectInputStream(getVotedForFile());
-                ActorRef<RaftMessage> votedFor = (ActorRef<RaftMessage>) ois.readObject();
-                ois.close();
-                return votedFor;
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            return null;
+        try {
+            ObjectInputStream ois = createObjectInputStream(getVotedForFile());
+            VotedForWrapper votedForWrapper = (VotedForWrapper) ois.readObject();
+            ActorRef<RaftMessage> votedFor = this.refResolver.resolveActorRef(votedForWrapper.votedFor);
+            ois.close();
+            return votedFor;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -100,7 +100,14 @@ public class ServerFileWriter implements ServerDataManager{
         initializeDataFiles();
     }
 
+    @Override
+    public void setActorRefResolver(ActorRefResolver refResolver) {
+        this.refResolver = refResolver;
+        System.out.println(this.refResolver);
+    }
+
     private int serverUID;
+    private ActorRefResolver refResolver;
 
 
     private void initializeDataFiles(){
@@ -108,8 +115,6 @@ public class ServerFileWriter implements ServerDataManager{
         File currentTermFile = getCurrentTermFile();
         File logFile = getLogFile();
         File votedForFile = getVotedForFile();
-        File votedForExistsFile = getVotedForExistsFile();
-
 
         try{
             if(!actorDirectory.exists()){
@@ -123,12 +128,9 @@ public class ServerFileWriter implements ServerDataManager{
                 logFile.createNewFile();
                 saveLog(new ArrayList<Entry>());
             }
-            if (!votedForExistsFile.exists()){
-                votedForExistsFile.createNewFile();
-                saveVotedForExists(false);
-            }
             if (!votedForFile.exists()){
                 votedForFile.createNewFile();
+                saveVotedFor(null);
             }
 
         } catch(IOException e){
@@ -163,32 +165,34 @@ public class ServerFileWriter implements ServerDataManager{
         return new File(getActorDirectoryPath() + "/vote.ser");
     }
 
-    private File getVotedForExistsFile(){
-        return new File(getActorDirectoryPath() + "/voteexists.ser");
-    }
+//    private File getVotedForExistsFile(){
+//        return new File(getActorDirectoryPath() + "/voteexists.ser");
+//    }
 
-    private void saveVotedForExists(boolean votedForExists) {
-        try {
-            ObjectOutputStream ois = createObjectOutputStream(getVotedForExistsFile());
-            ois.writeObject(votedForExists);
-            ois.flush();
-            ois.close();
-        } catch(IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+//    private void saveVotedForExists(boolean votedForExists) {
+//        try {
+//            ObjectOutputStream ois = createObjectOutputStream(getVotedForExistsFile());
+//            ois.writeObject(votedForExists);
+//            ois.flush();
+//            ois.close();
+//        } catch(IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
-    private boolean getVotedForExists(){
-        try {
-            ObjectInputStream ois = createObjectInputStream(getVotedForExistsFile());
-            boolean votedForExists = (boolean) ois.readObject();
-            ois.close();
-            return votedForExists;
-        }catch(IOException e){
-            throw new RuntimeException(e);
-        }catch(ClassNotFoundException e){
-            throw new RuntimeException(e);
-        }
-    }
+//    private boolean getVotedForExists(){
+//        try {
+//            ObjectInputStream ois = createObjectInputStream(getVotedForExistsFile());
+//            boolean votedForExists = (boolean) ois.readObject();
+//            ois.close();
+//            return votedForExists;
+//        }catch(IOException e){
+//            throw new RuntimeException(e);
+//        }catch(ClassNotFoundException e){
+//            throw new RuntimeException(e);
+//        }
+//    }
+
+    private record VotedForWrapper(String votedFor) implements Serializable{ }
 
 }

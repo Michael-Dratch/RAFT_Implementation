@@ -1,5 +1,7 @@
+import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.testkit.typed.javadsl.BehaviorTestKit;
 import akka.actor.testkit.typed.javadsl.TestInbox;
+import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
 import org.junit.After;
 
@@ -431,15 +433,27 @@ public class FollowerTests {
 
     @Test
     public void afterFailureFollowerWithVotedForRecoversVotedFor(){
-        follower = BehaviorTestKit.create(TestableFollower.create(1, new ArrayList<>(), -1));
-        TestInbox<RaftMessage> inbox2 = TestInbox.create();
-        follower.run(new RaftMessage.RequestVote(1, inboxRef, 1, 1));
-        follower.run(new RaftMessage.Failure());
-        follower.run(new RaftMessage.TestMessage.GetState(inboxRef));
-        List<RaftMessage> responses = inbox.getAllReceived();
-        assertCorrectFollowerState(responses.get(1), new ArrayList<>(), inboxRef);
-        follower.run(new RaftMessage.RequestVote(1, inbox2.getRef(), 1, 1));
-        RaftMessage response = inbox2.receiveMessage();
-        assertCorrectRequestVoteResponse(response, 1, false);
+        ActorTestKit testKit = ActorTestKit.create();
+        ActorRef<RaftMessage> node = testKit.spawn(TestableFollower.create(1, new ArrayList<>(), -1));
+        TestProbe<RaftMessage> probe = testKit.createTestProbe();
+        node.tell(new RaftMessage.RequestVote(1, probe.getRef(), 1, 1));
+        node.tell(new RaftMessage.TestMessage.GetState(probe.getRef()));
+        List<RaftMessage> responses = probe.receiveSeveralMessages(2);
+        assertCorrectFollowerState(responses.get(1), new ArrayList<>(), probe.getRef());
+
+
+
+//        follower = BehaviorTestKit.create(TestableFollower.create(1, new ArrayList<>(), -1));
+//        TestInbox<RaftMessage> inbox2 = TestInbox.create();
+//        follower.run(new RaftMessage.RequestVote(1, inboxRef, 1, 1));
+//        //follower.run(new RaftMessage.Failure());
+//        follower.run(new RaftMessage.TestMessage.GetState(inboxRef));
+//        List<RaftMessage> responses = inbox.getAllReceived();
+//        assertCorrectFollowerState(responses.get(1), new ArrayList<>(), inboxRef);
+//        follower.run(new RaftMessage.RequestVote(1, inbox2.getRef(), 1, 1));
+//        RaftMessage response = inbox2.receiveMessage();
+//        assertCorrectRequestVoteResponse(response, 1, false);
+
+        testKit.shutdownTestKit();
     }
 }

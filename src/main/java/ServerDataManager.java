@@ -1,4 +1,6 @@
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorRefResolver;
+import akka.actor.typed.ActorSystem;
 
 import java.util.List;
 
@@ -11,4 +13,5 @@ public interface ServerDataManager {
     public int getCurrentTerm();
     public ActorRef<RaftMessage> getVotedFor();
     public void setServerID(int ID);
+    public void setActorRefResolver(ActorRefResolver refResolver);
 }
