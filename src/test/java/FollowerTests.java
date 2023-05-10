@@ -5,10 +5,7 @@ import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.Behaviors;
-import org.junit.After;
-
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -23,7 +20,7 @@ public class FollowerTests {
 //    TestInbox<RaftMessage> inbox;
 //    ActorRef<RaftMessage> inboxRef;
 
-    ActorTestKit testKit;
+    static ActorTestKit testKit;
 
     TestProbe<RaftMessage> probe;
 
@@ -157,17 +154,24 @@ public class FollowerTests {
         }
     }
 
+    @BeforeClass
+    public static void classSetUp(){
+        testKit = ActorTestKit.create();
+    }
+
+    @AfterClass
+    public static void classTearDown(){
+        testKit.shutdownTestKit();
+    }
 
     @Before
     public void setUp(){
-        testKit = ActorTestKit.create();
         probe = testKit.createTestProbe();
         probeRef = probe.ref();
     }
 
     @After
     public void tearDown(){
-        testKit.shutdownTestKit();
         clearDataDirectory();
     }
 
