@@ -14,24 +14,24 @@ import static java.lang.Math.min;
 
 public class Follower extends AbstractBehavior<RaftMessage> {
 
-//    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
-//        return Behaviors.<RaftMessage>supervise(
-//            Behaviors.setup(context -> {
-//                return Behaviors.withTimers(timers -> {
-//                    return new Follower(context, timers, dataManager);
-//                });
-//            })
-//        ).onFailure(SupervisorStrategy.restart());
-//    }
+    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
+        return Behaviors.<RaftMessage>supervise(
+            Behaviors.setup(context -> {
+                return Behaviors.withTimers(timers -> {
+                    return new Follower(context, timers, dataManager);
+                });
+            })
+        ).onFailure(SupervisorStrategy.restart());
+    }
 
 // constructor without restart supervision strategy for debugging
-    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
-        return Behaviors.setup(context -> {
-                    return Behaviors.withTimers(timers -> {
-                        return new Follower(context, timers, dataManager);
-                    });
-                });
-    }
+//    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
+//        return Behaviors.setup(context -> {
+//                    return Behaviors.withTimers(timers -> {
+//                        return new Follower(context, timers, dataManager);
+//                    });
+//                });
+//    }
 
 
 
@@ -74,11 +74,13 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         dataManager.setActorRefResolver(ActorRefResolver.get(context.getSystem()));
         dataManager.setServerID(context.getSelf().path().uid());
         System.out.println(ActorRefResolver.get(context.getSystem()));
-        System.out.println("finished initializing data manager");
     }
 
     private void initializeState(ServerDataManager dataManager) {
         this.votedFor = dataManager.getVotedFor();
+        if (this.votedFor.equals(getContext().getSystem().deadLetters())){
+            this.votedFor = null;
+        }
         this.log = dataManager.getLog();
     }
 
@@ -181,7 +183,8 @@ public class Follower extends AbstractBehavior<RaftMessage> {
     private boolean doesRequestVoteFail(RaftMessage.RequestVote msg){
         if (msg.term() < this.currentTerm) return true;
 
-        else if (votedFor != null) return true;
+        else if (votedFor != null) {
+            return true;}
 
         else if (this.log.size() == 0) return false;
 

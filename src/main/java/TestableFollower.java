@@ -16,7 +16,6 @@ public class TestableFollower extends Follower {
                     return new TestableFollower(context, timers, currentTerm, log);
                 });
             })).onFailure(SupervisorStrategy.restart());
-
     }
 
    //  constructor without restart supervision strategy for debugging
