@@ -40,8 +40,8 @@ public class FollowerTests {
     private void assertCorrectRequestVoteResponse(RaftMessage response, int expectedTerm, boolean expectedVoteGranted){
         if (response instanceof RaftMessage.RequestVoteResponse){
             RaftMessage.RequestVoteResponse msg = (RaftMessage.RequestVoteResponse) response;
-            assertEquals(expectedTerm, msg.term());
             assertEquals(expectedVoteGranted, msg.voteGranted());
+            assertEquals(expectedTerm, msg.term());
         } else {
             throw new AssertionError("Incorrect Response Message Type");
         }
@@ -452,5 +452,18 @@ public class FollowerTests {
         follower.tell(new RaftMessage.TestMessage.GetState(probeRef));
         RaftMessage.TestMessage.GetStateResponse response = (RaftMessage.TestMessage.GetStateResponse) probe.receiveSeveralMessages(2).get(1);
         assertEquals(2, response.currentTerm());
+    }
+
+    @Test
+    public void followerReceivesNoMessagesTimesOutAndSendsRequestVoteToAllOtherNodes(){
+        TestProbe<RaftMessage> probe2 = testKit.createTestProbe();
+        List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
+        groupRefs.add(probeRef);
+        groupRefs.add(probe2.ref());
+        follower = testKit.spawn(TestableFollower.create());
+        follower.tell(new RaftMessage.SetGroupRefs(groupRefs));
+        follower.tell(new RaftMessage.Start());
+        probe.expectMessage(new RaftMessage.RequestVote(1, follower, -1, -1));
+        probe2.expectMessage(new RaftMessage.RequestVote(1, follower, -1, -1));
     }
 }

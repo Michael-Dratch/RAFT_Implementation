@@ -4,6 +4,7 @@ import akka.actor.typed.Behavior;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.*;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +17,13 @@ public class Follower extends AbstractBehavior<RaftMessage> {
 
     public static Behavior<RaftMessage> create(ServerDataManager dataManager){
         return Behaviors.<RaftMessage>supervise(
-            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager)))
+            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, 0)))
+        ).onFailure(SupervisorStrategy.restart());
+    }
+
+    public static Behavior<RaftMessage> create(ServerDataManager dataManager, int currentTerm){
+        return Behaviors.<RaftMessage>supervise(
+                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, currentTerm)))
         ).onFailure(SupervisorStrategy.restart());
     }
 
@@ -40,7 +47,11 @@ public class Follower extends AbstractBehavior<RaftMessage> {
 
     protected TimerScheduler<RaftMessage> timer;
 
+    private static final Object TIMER_KEY = new Object();
+
     protected ServerDataManager dataManager;
+
+    protected List<ActorRef<RaftMessage>> groupRefs;
 
     protected int currentTerm;
 
@@ -66,6 +77,20 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         initializeState(dataManager);
     }
 
+    protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager, int currentTerm){
+        super(context);
+        this.timer = timers;
+        this.dataManager = dataManager;
+        this.commitIndex = -1;
+        this.lastApplied = -1;
+        this.currentTerm = currentTerm;
+        this.votedFor = null;
+        this.log = new ArrayList<Entry>();
+
+        initializeDataManager(context, dataManager);
+        initializeState(dataManager, currentTerm);
+    }
+
     private void initializeDataManager(ActorContext<RaftMessage> context, ServerDataManager dataManager) {
         dataManager.setActorRefResolver(ActorRefResolver.get(context.getSystem()));
         dataManager.setServerID(context.getSelf().path().uid());
@@ -81,24 +106,46 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         this.log = dataManager.getLog();
     }
 
+    private void initializeState(ServerDataManager dataManager, int currentTerm) {
+        this.dataManager.saveCurrentTerm(currentTerm);
+        this.votedFor = dataManager.getVotedFor();
+        if (this.votedFor.equals(getContext().getSystem().deadLetters())){
+            this.votedFor = null;
+        }
+        this.log = dataManager.getLog();
+    }
 
-    private Behavior<RaftMessage> dispatch(RaftMessage msg){
-        switch(msg) {
-            case RaftMessage.AppendEntries message:
-                handleAppendEntries(message);
+
+    private Behavior<RaftMessage> dispatch(RaftMessage message){
+        switch(message) {
+            case RaftMessage.Start msg:
+                startTimer();
                 break;
-            case RaftMessage.RequestVote message:
-                handleRequestVote(message);
+            case RaftMessage.SetGroupRefs msg:
+                this.groupRefs = msg.groupRefs();
                 break;
-            case RaftMessage.TestMessage message:
-                handleTestMessage(message);
+            case RaftMessage.AppendEntries msg:
+                handleAppendEntries(msg);
                 break;
-            case RaftMessage.Failure message:   // Used to simulate node failure
+            case RaftMessage.RequestVote msg:
+                handleRequestVote(msg);
+                break;
+            case RaftMessage.TimeOut msg:
+                //return new Candadite.create();
+                break;
+            case RaftMessage.TestMessage msg:
+                handleTestMessage(msg);
+                break;
+            case RaftMessage.Failure msg:   // Used to simulate node failure
                 throw new RuntimeException("Test Failure");
             default:
                 break;
         }
         return this;
+    }
+
+    private void startTimer() {
+        this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(200));
     }
 
 
@@ -107,6 +154,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         if (doesAppendEntriesFail(msg)){
             msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
         } else {
+            startTimer();
             processSuccessfulAppendEntries(msg);
             msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, true));
         }
@@ -171,6 +219,7 @@ public class Follower extends AbstractBehavior<RaftMessage> {
         if (doesRequestVoteFail(msg)) {
             returnRequestVoteResponse(msg, false);
         }else{
+            startTimer();
             this.votedFor = msg.candidateRef();
             this.dataManager.saveVotedFor(this.votedFor);
             returnRequestVoteResponse(msg, true);

@@ -22,6 +22,10 @@ public interface RaftMessage {
 
     public record RequestVoteResponse(int term, boolean voteGranted) implements RaftMessage {}
 
+    public record SetGroupRefs(List<ActorRef<RaftMessage>> groupRefs) implements RaftMessage {}
+
+    public record Start() implements RaftMessage{}
+
     public record TimeOut() implements RaftMessage {}
 
     public record HeartBeatTimeOut() implements RaftMessage {}

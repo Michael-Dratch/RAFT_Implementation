@@ -43,9 +43,8 @@ public class TestableFollower extends Follower {
 //    }
 
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log) {
-        super(context, timers, new ServerFileWriter());
+        super(context, timers, new ServerFileWriter(), currentTerm);
         this.timer = timers;
-        this.currentTerm = currentTerm;
         this.log = log;
     }
 
@@ -67,10 +66,9 @@ public class TestableFollower extends Follower {
 //    }
     private TestableFollower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, int currentTerm, List<Entry> log, int commitIndex) {
 
-        super(context, timers, new ServerFileWriter());
+        super(context, timers, new ServerFileWriter(), currentTerm);
         this.timer = timers;
         this.commitIndex = commitIndex;
-        this.currentTerm = currentTerm;
         this.log = log;
     }
 
@@ -92,9 +90,8 @@ public class TestableFollower extends Follower {
                              int commitIndex,
                              int lastApplied) {
 
-        super(context, timers, new ServerFileWriter());
+        super(context, timers, new ServerFileWriter(), currentTerm);
         this.timer = timers;
-        this.currentTerm = currentTerm;
         this.votedFor = votedFor;
         this.log = log;
         this.commitIndex = commitIndex;
