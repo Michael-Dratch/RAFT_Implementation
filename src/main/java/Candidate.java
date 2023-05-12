@@ -12,12 +12,13 @@ import java.util.Random;
 public class Candidate extends RaftServer {
 
     public static Behavior<RaftMessage> create(ServerDataManager dataManager,
+                                               Object timerKey,
                                                int currentTerm,
                                                List<ActorRef<RaftMessage>> groupRefs,
                                                int commitIndex,
                                                int lastApplied){
         return Behaviors.<RaftMessage>supervise(
-                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Candidate(context, timers, dataManager, currentTerm, groupRefs, commitIndex, lastApplied)))
+                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Candidate(context, timers, dataManager, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
         ).onFailure(SupervisorStrategy.restart());
     }
 
@@ -29,11 +30,12 @@ public class Candidate extends RaftServer {
     protected Candidate(ActorContext<RaftMessage> context,
                         TimerScheduler<RaftMessage> timers,
                         ServerDataManager dataManager,
+                        Object timerKey,
                         int currentTerm,
                         List<ActorRef<RaftMessage>> groupRefs,
                         int commitIndex,
                         int lastApplied){
-        super(context, timers, dataManager, commitIndex, lastApplied);
+        super(context, timers, dataManager, timerKey, commitIndex, lastApplied);
         this.currentTerm = currentTerm;
         this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
@@ -43,27 +45,44 @@ public class Candidate extends RaftServer {
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
         switch(message) {
-            case RaftMessage.SetGroupRefs msg:
-                //this.groupRefs = msg.groupRefs();
-                break;
             case RaftMessage.AppendEntries msg:
-                //handleAppendEntries(msg);
+                if (msg.term() < this.currentTerm) sendFalseAppendEntriesResponse(msg);
+                else return Follower.create(dataManager);
                 break;
             case RaftMessage.RequestVote msg:
-                //handleRequestVote(msg);
+                if (msg.term() > this.currentTerm) return Follower.create(this.dataManager);
+                else sendRequestVoteFailResponse(msg);
                 break;
             case RaftMessage.TimeOut msg:
                 handleTimeOut();
                 break;
-            case RaftMessage.TestMessage msg:
-                //handleTestMessage(msg);
-                break;
             case RaftMessage.Failure msg:   // Used to simulate node failure
                 throw new RuntimeException("Test Failure");
+            case RaftMessage.TestMessage msg:
+                handleTestMessage(msg);
+                break;
             default:
                 break;
         }
         return this;
+    }
+
+    private void sendFalseAppendEntriesResponse(RaftMessage.AppendEntries msg) {
+        msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
+    }
+
+    private void handleTestMessage(RaftMessage.TestMessage message) {
+        switch(message) {
+            case RaftMessage.TestMessage.GetBehavior msg:
+                msg.sender().tell(new RaftMessage.TestMessage.GetBehaviorResponse("CANDIDATE"));
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void sendRequestVoteFailResponse(RaftMessage.RequestVote msg) {
+        msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, false));
     }
 
 }

@@ -17,6 +17,35 @@ public class CandidateTests     {
 
     ActorRef<RaftMessage> probeRef;
 
+    private List<ActorRef<RaftMessage>> getGroupRefs(int count){
+        List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
+        for (int i = 0; i < count; i++){
+            TestProbe<RaftMessage> probe = testKit.createTestProbe();
+            groupRefs.add(probe.ref());
+        }
+        return groupRefs;
+    }
+
+    private void clearDataDirectory(){
+        File dataDir = new File("./data/");
+        File[] contents = dataDir.listFiles();
+        if (contents != null) {
+            for (File file : contents) {
+                deleteDirectory(file);
+            }
+        }
+    }
+
+    private void deleteDirectory(File directory){
+        File[] contents = directory.listFiles();
+        if (contents != null){
+            for (File file : contents){
+                deleteDirectory(file);
+            }
+        }
+        directory.delete();
+    }
+
     @BeforeClass
     public static void classSetUp(){
         testKit = ActorTestKit.create();
@@ -32,29 +61,9 @@ public class CandidateTests     {
         probe = testKit.createTestProbe();
         probeRef = probe.ref();
     }
-
     @After
     public void tearDown(){
         clearDataDirectory();
-    }
-
-    private void clearDataDirectory(){
-        File dataDir = new File("./data/");
-        File[] contents = dataDir.listFiles();
-        if (contents != null) {
-            for (File file : contents) {
-                deleteDirectory(file);
-            }
-        }
-    }
-    private void deleteDirectory(File directory){
-        File[] contents = directory.listFiles();
-        if (contents != null){
-            for (File file : contents){
-                deleteDirectory(file);
-            }
-        }
-        directory.delete();
     }
 
     @Test
@@ -63,9 +72,74 @@ public class CandidateTests     {
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(probeRef);
         groupRefs.add(probe2.ref());
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), 1, groupRefs, -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, groupRefs, -1, -1));
         probe.expectMessage(new RaftMessage.RequestVote(2, candidate, -1, -1));
         probe2.expectMessage(new RaftMessage.RequestVote(2, candidate, -1, -1));
     }
+
+    @Test
+    public void candidateGetsRequestVoteFromOtherNodeSameTermSendsResponseWithFalse(){
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(), 1, new ArrayList<>(), -1, -1));
+        candidate.tell(new RaftMessage.RequestVote(1, probeRef, -1, -1));
+        probe.expectMessage(new RaftMessage.RequestVoteResponse(1, false));
     }
+
+    @Test
+    public void candidateGetsRequestVoteFromLaterTermImmediatlyChangesTofollower(){
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate.tell(new RaftMessage.RequestVote(2, probeRef, -1, -1));
+        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
+    }
+
+    @Test
+    public void candidateReceivesOldAppendEntriesReplyFalse(){
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate.tell(new RaftMessage.AppendEntries(0, probeRef, -1,-1, new ArrayList<>(), -1));
+        probe.expectMessage(new RaftMessage.AppendEntriesResponse(1, false));
+    }
+
+    @Test
+    public void candidateReceivesAppendEntriesSameTermConvertsToFollower(){
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate.tell(new RaftMessage.AppendEntries(1, probeRef, -1,-1, new ArrayList<>(), -1));
+        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
+    }
+
+    @Test
+    public void candidateReceivesLessThanMajorityVotesStaysCandidate(){
+        List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
+        groupRefs.add(probeRef);
+        groupRefs.add(probeRef);
+        groupRefs.add(probeRef);
+        groupRefs.add(probeRef);
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, groupRefs, -1, -1));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
+        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("CANDIDATE"));
+    }
+
+    @Test
+    public void candidateReceivesMajorityVotesBecomesLeader(){
+        List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
+        groupRefs.add(probeRef);
+        groupRefs.add(probeRef);
+        groupRefs.add(probeRef);
+        groupRefs.add(probeRef);
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, groupRefs, -1, -1));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
+        candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
+        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("LEADER"));
+    }
+
+
+
+}
 

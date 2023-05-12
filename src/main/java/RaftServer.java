@@ -13,7 +13,7 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
 
     protected TimerScheduler<RaftMessage> timer;
 
-    protected final Object TIMER_KEY = new Object();
+    protected Object TIMER_KEY = new Object();
 
     protected ServerDataManager dataManager;
 
@@ -37,6 +37,23 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
                          int lastApplied){
         super(context);
         this.timer = timers;
+        this.dataManager = dataManager;
+        this.commitIndex = commitIndex;
+        this.lastApplied = lastApplied;
+
+        initializeDataManager(context, dataManager);
+        initializeState(dataManager);
+    }
+
+    protected RaftServer(ActorContext<RaftMessage> context,
+                         TimerScheduler<RaftMessage> timers,
+                         ServerDataManager dataManager,
+                         Object timerKey,
+                         int commitIndex,
+                         int lastApplied){
+        super(context);
+        this.timer = timers;
+        this.TIMER_KEY = timerKey;
         this.dataManager = dataManager;
         this.commitIndex = commitIndex;
         this.lastApplied = lastApplied;

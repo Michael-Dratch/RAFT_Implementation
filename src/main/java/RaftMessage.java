@@ -41,6 +41,8 @@ public interface RaftMessage {
                                        List<Entry> log,
                                        int commitIndex,
                                        int lastApplied) implements TestMessage {}
+        public record GetBehavior(ActorRef<RaftMessage> sender) implements TestMessage {}
+        public record GetBehaviorResponse(String behavior) implements TestMessage {}
         public record GetCurrentTerm(ActorRef<RaftMessage> sender) implements TestMessage{}
         public record GetCurrentTermResponse(int currentTerm) implements TestMessage {}
         public record GetLog(ActorRef<RaftMessage> sender) implements TestMessage{}

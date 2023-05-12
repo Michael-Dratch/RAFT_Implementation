@@ -18,6 +18,17 @@ public class Follower extends RaftServer {
         ).onFailure(SupervisorStrategy.restart());
     }
 
+    public static Behavior<RaftMessage> create(ServerDataManager dataManager,
+                                               Object timerKey,
+                                               int currentTerm,
+                                               List<ActorRef<RaftMessage>> groupRefs,
+                                               int commitIndex,
+                                               int lastApplied){
+        return Behaviors.<RaftMessage>supervise(
+                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
+        ).onFailure(SupervisorStrategy.restart());
+    }
+
 
     @Override
     public Receive<RaftMessage> createReceive() {
@@ -29,6 +40,23 @@ public class Follower extends RaftServer {
 
     protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager){
         super(context, timers, dataManager, -1,-1);
+    }
+
+    protected Follower(ActorContext<RaftMessage> context,
+                        TimerScheduler<RaftMessage> timers,
+                        ServerDataManager dataManager,
+                        Object timerKey,
+                        int currentTerm,
+                        List<ActorRef<RaftMessage>> groupRefs,
+                        int commitIndex,
+                        int lastApplied){
+        super(context, timers, dataManager, commitIndex, lastApplied);
+        this.currentTerm = currentTerm;
+        this.dataManager.saveCurrentTerm(this.currentTerm);
+        this.TIMER_KEY = timerKey;
+        this.groupRefs = groupRefs;
+        this.dataManager.saveGroupRefs(this.groupRefs);
+        startTimer();
     }
 
 
@@ -48,7 +76,7 @@ public class Follower extends RaftServer {
                 break;
             case RaftMessage.TimeOut msg:
                 handleTimeOut();
-                return Candidate.create(this.dataManager,this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
+                return Candidate.create(this.dataManager, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
             case RaftMessage.TestMessage msg:
                 handleTestMessage(msg);
                 break;
@@ -153,9 +181,14 @@ public class Follower extends RaftServer {
         msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, voteGranted));
     }
 
-    protected void handleTestMessage(RaftMessage.TestMessage msg){
-        //implemented in TestableFollower Class
-        return;
+    protected void handleTestMessage(RaftMessage.TestMessage message){
+        switch(message){
+            case RaftMessage.TestMessage.GetBehavior msg:
+                msg.sender().tell(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
+                break;
+            default:
+                break;
+        }
     }
 
     protected void writeEntriesToLogFile(List<Entry> entries){
