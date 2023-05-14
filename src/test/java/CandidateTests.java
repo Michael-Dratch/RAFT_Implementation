@@ -124,6 +124,14 @@ public class CandidateTests     {
     }
 
     @Test
+    public void receivesRequestVoteResponseFromLaterTermImmediatelyBecomesFollower(){
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate.tell(new RaftMessage.RequestVoteResponse(2, false));
+        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
+    }
+
+    @Test
     public void candidateReceivesMajorityVotesBecomesLeader(){
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(probeRef);

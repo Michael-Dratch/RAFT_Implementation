@@ -27,6 +27,9 @@ public class Candidate extends RaftServer {
         return newReceiveBuilder().onMessage(RaftMessage.class, this::dispatch).build();
     }
 
+    private int votesReceived;
+    private int votesRequired;
+
     protected Candidate(ActorContext<RaftMessage> context,
                         TimerScheduler<RaftMessage> timers,
                         ServerDataManager dataManager,
@@ -40,6 +43,8 @@ public class Candidate extends RaftServer {
         this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
         this.dataManager.saveGroupRefs(this.groupRefs);
+        votesReceived = 0;
+        votesRequired = this.groupRefs.size()/2;
         startTimer();
     }
 
@@ -53,8 +58,16 @@ public class Candidate extends RaftServer {
                 if (msg.term() > this.currentTerm) return Follower.create(this.dataManager);
                 else sendRequestVoteFailResponse(msg);
                 break;
+            case RaftMessage.RequestVoteResponse msg:
+                if (msg.term() > this.currentTerm) return Follower.create(this.dataManager);
+                else {
+                    handleRequestVoteResponse(msg);
+                    if (votesReceived >= votesRequired) return getLeaderBehavior();
+                }
+                break;
             case RaftMessage.TimeOut msg:
                 handleTimeOut();
+                votesReceived = 0;
                 break;
             case RaftMessage.Failure msg:   // Used to simulate node failure
                 throw new RuntimeException("Test Failure");
@@ -65,6 +78,21 @@ public class Candidate extends RaftServer {
                 break;
         }
         return this;
+    }
+
+    private Behavior<RaftMessage> getLeaderBehavior() {
+        return Leader.create(this.dataManager,
+                this.TIMER_KEY,
+                this.currentTerm,
+                this.groupRefs,
+                this.commitIndex,
+                this.lastApplied);
+    }
+
+    private void handleRequestVoteResponse(RaftMessage.RequestVoteResponse msg) {
+        if (msg.voteGranted() == true){
+            votesReceived++;
+        }
     }
 
     private void sendFalseAppendEntriesResponse(RaftMessage.AppendEntries msg) {
@@ -84,6 +112,5 @@ public class Candidate extends RaftServer {
     private void sendRequestVoteFailResponse(RaftMessage.RequestVote msg) {
         msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, false));
     }
-
 }
 
