@@ -91,11 +91,11 @@ public class Follower extends RaftServer {
     private void handleAppendEntries(RaftMessage.AppendEntries msg){
         updateCurrentTerm(msg.term());
         if (doesAppendEntriesFail(msg)){
-            msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
+            sendAppendEntriesResponse(msg, false);
         } else {
             startTimer();
             processSuccessfulAppendEntries(msg);
-            msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, true));
+            sendAppendEntriesResponse(msg, true);
         }
     }
 

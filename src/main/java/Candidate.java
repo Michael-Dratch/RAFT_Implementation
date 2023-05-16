@@ -51,7 +51,7 @@ public class Candidate extends RaftServer {
     private Behavior<RaftMessage> dispatch(RaftMessage message){
         switch(message) {
             case RaftMessage.AppendEntries msg:
-                if (msg.term() < this.currentTerm) sendFalseAppendEntriesResponse(msg);
+                if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
                 else return Follower.create(dataManager);
                 break;
             case RaftMessage.RequestVote msg:
@@ -93,10 +93,6 @@ public class Candidate extends RaftServer {
         if (msg.voteGranted() == true){
             votesReceived++;
         }
-    }
-
-    private void sendFalseAppendEntriesResponse(RaftMessage.AppendEntries msg) {
-        msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(this.currentTerm, false));
     }
 
     private void handleTestMessage(RaftMessage.TestMessage message) {

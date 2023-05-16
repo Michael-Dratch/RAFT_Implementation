@@ -97,6 +97,14 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         this.dataManager.saveCurrentTerm(this.currentTerm);
     }
 
+    protected void sendAppendEntriesResponse(RaftMessage.AppendEntries msg, boolean success) {
+        msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(getContext().getSelf(), this.currentTerm, success, msg.prevLogIndex() + msg.entries().size()));
+    }
+
+    protected void sendRequestVoteResponse(RaftMessage.RequestVote msg, boolean success) {
+        msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, success));
+    }
+
     private void sendRequestVotesToAllNodes() {
         for (ActorRef<RaftMessage> ref: this.groupRefs){
             ref.tell(new RaftMessage.RequestVote(this.currentTerm,

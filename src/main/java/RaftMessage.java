@@ -4,6 +4,9 @@ import java.util.List;
 
 public interface RaftMessage {
 
+    public record ClientRequest(ActorRef<RaftMessage> clientRef, Command command) implements RaftMessage {}
+    public record ClientResponse(boolean Success) implements RaftMessage {}
+
     public record AppendEntries(int term,
                                 ActorRef<RaftMessage> leaderRef,
                                 int prevLogIndex,
@@ -18,7 +21,7 @@ public interface RaftMessage {
                               int lastLogTerm
                               ) implements RaftMessage {}
 
-    public record AppendEntriesResponse(int term, boolean success) implements RaftMessage {}
+    public record AppendEntriesResponse(ActorRef<RaftMessage> sender, int term, boolean success, int matchIndex) implements RaftMessage {}
 
     public record RequestVoteResponse(int term, boolean voteGranted) implements RaftMessage {}
 

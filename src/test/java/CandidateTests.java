@@ -96,7 +96,7 @@ public class CandidateTests     {
     public void candidateReceivesOldAppendEntriesReplyFalse(){
         candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
         candidate.tell(new RaftMessage.AppendEntries(0, probeRef, -1,-1, new ArrayList<>(), -1));
-        probe.expectMessage(new RaftMessage.AppendEntriesResponse(1, false));
+        probe.expectMessage(new RaftMessage.AppendEntriesResponse(candidate, 1, false, -1));
     }
 
     @Test
