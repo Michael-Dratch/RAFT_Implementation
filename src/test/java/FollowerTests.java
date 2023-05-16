@@ -466,4 +466,15 @@ public class FollowerTests {
         probe.expectMessage(new RaftMessage.RequestVote(1, follower, -1, -1));
         probe2.expectMessage(new RaftMessage.RequestVote(1, follower, -1, -1));
     }
+
+    @Test
+    public void clientRequestToFollowerGetsRoutedToLeader(){
+        follower = testKit.spawn(Follower.create(new ServerFileWriter()));
+        List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
+        groupRefs.add(follower);
+        ActorRef<RaftMessage> leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(), 1, groupRefs, -1, -1));
+        follower.tell(new RaftMessage.AppendEntries(1, leader,-1, -1, new ArrayList<>(), -1));
+        follower.tell(new RaftMessage.ClientRequest(probeRef, new StringCommand(1,1,"Test")));
+        probe.expectMessage(new RaftMessage.ClientResponse(true));
+    }
 }

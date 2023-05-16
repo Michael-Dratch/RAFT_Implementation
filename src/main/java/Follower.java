@@ -56,8 +56,11 @@ public class Follower extends RaftServer {
         this.TIMER_KEY = timerKey;
         this.groupRefs = groupRefs;
         this.dataManager.saveGroupRefs(this.groupRefs);
+        this.currentLeader = null;
         startTimer();
     }
+
+    private ActorRef<RaftMessage> currentLeader;
 
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
@@ -77,6 +80,9 @@ public class Follower extends RaftServer {
             case RaftMessage.TimeOut msg:
                 handleTimeOut();
                 return Candidate.create(this.dataManager, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
+            case RaftMessage.ClientRequest msg:
+                handleClientRequest(msg);
+                break;
             case RaftMessage.TestMessage msg:
                 handleTestMessage(msg);
                 break;
@@ -124,6 +130,7 @@ public class Follower extends RaftServer {
         }
         updateCommitIndex(msg);
         this.dataManager.saveLog(this.log);
+        this.currentLeader = msg.leaderRef();
     }
 
     private boolean entryIndexExceedsLogSize(RaftMessage.AppendEntries msg, int i) {
@@ -179,6 +186,12 @@ public class Follower extends RaftServer {
 
     private void returnRequestVoteResponse(RaftMessage.RequestVote msg, boolean voteGranted) {
         msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, voteGranted));
+    }
+
+    private void handleClientRequest(RaftMessage.ClientRequest msg) {
+        if (currentLeader != null){
+            this.currentLeader.tell(msg);
+        }
     }
 
     protected void handleTestMessage(RaftMessage.TestMessage message){
