@@ -1,15 +1,23 @@
+package raftstates;
+
 import akka.actor.typed.*;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.javadsl.TimerScheduler;
+import datapersistence.ServerDataManager;
+import statemachine.StateMachine;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-public class Leader extends RaftServer{
+import messages.*;
+import statemachine.Entry;
+
+
+public class Leader extends RaftServer {
 
     public static Behavior<RaftMessage> create(ServerDataManager dataManager,
                                                StateMachine stateMachine,

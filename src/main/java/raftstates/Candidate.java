@@ -1,11 +1,12 @@
+package raftstates;
+
 import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
+import datapersistence.ServerDataManager;
+import messages.RaftMessage;
+import statemachine.StateMachine;
 
-import javax.swing.plaf.nimbus.State;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 public class Candidate extends RaftServer {
 

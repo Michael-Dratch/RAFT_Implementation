@@ -1,3 +1,5 @@
+package statemachine;
+
 import java.util.List;
 
 public interface StateMachine {

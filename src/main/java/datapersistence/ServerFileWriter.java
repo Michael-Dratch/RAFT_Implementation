@@ -1,12 +1,16 @@
+package datapersistence;
+
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorRefResolver;
-import akka.actor.typed.ActorSystem;
+import datapersistence.ServerDataManager;
 
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ServerFileWriter implements ServerDataManager{
+import statemachine.Entry;
+import messages.RaftMessage;
+public class ServerFileWriter implements ServerDataManager {
 
     @Override
     public void saveLog(List<Entry> log) {
@@ -215,34 +219,6 @@ public class ServerFileWriter implements ServerDataManager{
     private File getGroupRefFile(){
         return new File(getActorDirectoryPath() + "/group.ser");
     }
-
-//    private File getVotedForExistsFile(){
-//        return new File(getActorDirectoryPath() + "/voteexists.ser");
-//    }
-
-//    private void saveVotedForExists(boolean votedForExists) {
-//        try {
-//            ObjectOutputStream ois = createObjectOutputStream(getVotedForExistsFile());
-//            ois.writeObject(votedForExists);
-//            ois.flush();
-//            ois.close();
-//        } catch(IOException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-
-//    private boolean getVotedForExists(){
-//        try {
-//            ObjectInputStream ois = createObjectInputStream(getVotedForExistsFile());
-//            boolean votedForExists = (boolean) ois.readObject();
-//            ois.close();
-//            return votedForExists;
-//        }catch(IOException e){
-//            throw new RuntimeException(e);
-//        }catch(ClassNotFoundException e){
-//            throw new RuntimeException(e);
-//        }
-//    }
 
     private record VotedForWrapper(String votedFor) implements Serializable{ }
 

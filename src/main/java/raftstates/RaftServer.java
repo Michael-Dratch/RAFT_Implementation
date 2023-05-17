@@ -1,3 +1,5 @@
+package raftstates;
+
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorRefResolver;
 import akka.actor.typed.Behavior;
@@ -6,10 +8,15 @@ import akka.actor.typed.javadsl.AbstractBehavior;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
+import datapersistence.ServerDataManager;
+import messages.RaftMessage;
+import statemachine.StateMachine;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Random;
+import statemachine.Entry;
+
 
 abstract class RaftServer extends AbstractBehavior<RaftMessage> {
 

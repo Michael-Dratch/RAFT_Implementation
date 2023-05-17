@@ -1,9 +1,15 @@
+package raftstates;
+
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
+import datapersistence.ServerFileWriter;
+import messages.RaftMessage;
+import statemachine.CommandList;
+import statemachine.Entry;
 
 import java.util.List;
 
@@ -33,10 +39,10 @@ public class TestableFollower extends Follower {
     }
 
    //  constructor without restart supervision strategy for debugging
-//        public static Behavior<RaftMessage> create(int currentTerm, List<Entry> log) {
+//        public static Behavior<messages.RaftMessage> create(int currentTerm, List<statemachine.Entry> log) {
 //        return Behaviors.setup(context -> {
 //                return Behaviors.withTimers(timers -> {
-//                    return new TestableFollower(context, timers, currentTerm, log);
+//                    return new raftstates.TestableFollower(context, timers, currentTerm, log);
 //                });
 //            });
 //

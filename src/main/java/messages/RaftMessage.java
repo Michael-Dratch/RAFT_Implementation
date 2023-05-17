@@ -1,6 +1,12 @@
+package messages;
+
 import akka.actor.typed.ActorRef;
+import statemachine.Command;
+import statemachine.Entry;
 
 import java.util.List;
+
+
 
 public interface RaftMessage {
 

@@ -1,3 +1,7 @@
+package statemachine;
+
+import statemachine.Command;
+
 import java.io.Serializable;
 
 public class StringCommand implements Command, Serializable {

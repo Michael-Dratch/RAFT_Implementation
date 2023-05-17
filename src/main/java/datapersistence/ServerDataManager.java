@@ -1,9 +1,12 @@
+package datapersistence;
+
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorRefResolver;
 import akka.actor.typed.ActorSystem;
 
 import java.util.List;
-
+import statemachine.Entry;
+import messages.RaftMessage;
 public interface ServerDataManager {
 
     public void saveLog(List<Entry> log);

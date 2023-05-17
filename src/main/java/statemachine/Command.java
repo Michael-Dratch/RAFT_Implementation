@@ -1,3 +1,5 @@
+package statemachine;
+
 public interface Command {
     int getClientID();
     int getCommandID();

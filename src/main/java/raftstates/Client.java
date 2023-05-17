@@ -1,11 +1,14 @@
+package raftstates;
+
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
-import akka.actor.typed.PreRestart;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.*;
+import messages.ClientMessage;
+import messages.RaftMessage;
+import statemachine.StringCommand;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 

@@ -1,7 +1,9 @@
+package statemachine;
+
 import java.util.ArrayList;
 import java.util.List;
 
-public class CommandList implements StateMachine{
+public class CommandList implements StateMachine {
 
     public CommandList(){
         this.commands = new ArrayList<>();

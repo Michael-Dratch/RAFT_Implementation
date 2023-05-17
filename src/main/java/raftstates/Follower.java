@@ -1,9 +1,15 @@
+package raftstates;
+
 import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
+import datapersistence.ServerDataManager;
+import messages.RaftMessage;
+import statemachine.StateMachine;
 
 import java.util.ArrayList;
 
 import static java.lang.Math.min;
+import statemachine.Entry;
 
 
 public class Follower extends RaftServer {
@@ -129,7 +135,7 @@ public class Follower extends RaftServer {
 
     private void updateCommitIndex(RaftMessage.AppendEntries msg) {
         if (msg.leaderCommit() > this.commitIndex){
-            this.commitIndex = min(msg.leaderCommit(), this.log.size() - 1);
+            this.commitIndex = Math.min(msg.leaderCommit(), this.log.size() - 1);
             if (commitIndex != -1) this.applyCommittedEntriesToStateMachine();
         }
     }
@@ -188,8 +194,4 @@ public class Follower extends RaftServer {
                 break;
         }
     }
-
-//    protected void writeEntriesToLogFile(List<Entry> entries){
-//        this.dataManager.saveLog(entries);
-//    }
 }
