@@ -99,7 +99,7 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
 
     protected void startTimer() {
         Random rand = new Random();
-        rand.setSeed(System.currentTimeMillis());
+        rand.setSeed(getContext().getSelf().path().uid());
         int randomNum = rand.nextInt(200);
         this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(200 + randomNum));
     }
@@ -118,7 +118,10 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     }
 
     protected void sendAppendEntriesResponse(RaftMessage.AppendEntries msg, boolean success) {
-        msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(getContext().getSelf(), this.currentTerm, success, msg.prevLogIndex() + msg.entries().size()));
+        msg.leaderRef().tell(new RaftMessage.AppendEntriesResponse(getContext().getSelf(),
+                                                                    this.currentTerm,
+                                                                    success,
+                                                          msg.prevLogIndex() + msg.entries().size()));
     }
 
     protected void sendRequestVoteResponse(RaftMessage.RequestVote msg, boolean success) {

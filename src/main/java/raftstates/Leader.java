@@ -9,9 +9,7 @@ import datapersistence.ServerDataManager;
 import statemachine.StateMachine;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 import messages.*;
 import statemachine.Entry;
@@ -142,7 +140,7 @@ public class Leader extends RaftServer {
     private void sendAppendEntriesToFollower(ActorRef<RaftMessage> follower) {
         int nodeNextIndex = this.nextIndex.get(follower);
         int prevLogTerm = getPrevLogTerm(nodeNextIndex - 1);
-        List<Entry> entries = this.log.subList(nodeNextIndex, this.log.size());
+        List<Entry> entries = new ArrayList<>(this.log.subList(nodeNextIndex, this.log.size()));
         follower.tell(new RaftMessage.AppendEntries(this.currentTerm, getContext().getSelf(), nodeNextIndex - 1, prevLogTerm, entries, this.commitIndex));
     }
 

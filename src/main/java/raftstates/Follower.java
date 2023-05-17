@@ -4,12 +4,14 @@ import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
 import datapersistence.ServerDataManager;
 import messages.RaftMessage;
+import statemachine.Entry;
 import statemachine.StateMachine;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static java.lang.Math.min;
-import statemachine.Entry;
 
 
 public class Follower extends RaftServer {
@@ -33,9 +35,12 @@ public class Follower extends RaftServer {
 
     protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager, StateMachine stateMachine, FailFlag failFlag){
         super(context, timers, dataManager, stateMachine, failFlag,  -1,-1);
+        requestBuffer = new ArrayList<>();
     }
 
     private ActorRef<RaftMessage> currentLeader;
+
+    private List<RaftMessage.ClientRequest> requestBuffer;
 
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
@@ -46,11 +51,13 @@ public class Follower extends RaftServer {
                     break;
                 case RaftMessage.SetGroupRefs msg:
                     this.groupRefs = msg.groupRefs();
+                    this.dataManager.saveGroupRefs(this.groupRefs);
                     break;
                 case RaftMessage.AppendEntries msg:
                     handleAppendEntries(msg);
                     break;
                 case RaftMessage.RequestVote msg:
+                    getContext().getLog().info("RECEIVED REQUEST VOTE FROM " + msg.candidateRef());
                     handleRequestVote(msg);
                     break;
                 case RaftMessage.TimeOut msg:
@@ -58,6 +65,7 @@ public class Follower extends RaftServer {
                     getContext().getLog().info("TIMEOUT STARTING ELECTION");
                     return Candidate.create(this.dataManager, this.stateMachine, this.failFlag, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
                 case RaftMessage.ClientRequest msg:
+                    getContext().getLog().info("RECEIVED CLIENT REQUEST");
                     handleClientRequest(msg);
                     break;
                 case RaftMessage.TestMessage msg:
@@ -98,6 +106,7 @@ public class Follower extends RaftServer {
     }
 
     private void processSuccessfulAppendEntries(RaftMessage.AppendEntries msg) {
+
         int entryCount = msg.entries().size();
 
         for (int i = 0; i < entryCount; i++){
@@ -113,7 +122,18 @@ public class Follower extends RaftServer {
         }
         updateCommitIndex(msg);
         this.dataManager.saveLog(this.log);
+        if (this.currentLeader == null){
+            forwardBufferedRequests(msg);
+        }
         this.currentLeader = msg.leaderRef();
+    }
+
+    private void forwardBufferedRequests(RaftMessage.AppendEntries msg) {
+        getContext().getLog().info("FORWARDING BUFFERED REQUESTS TO LEADER");
+        for (RaftMessage.ClientRequest request : requestBuffer){
+            msg.leaderRef().tell(request);
+        }
+        requestBuffer.clear();
     }
 
     private boolean entryIndexExceedsLogSize(RaftMessage.AppendEntries msg, int i) {
@@ -173,9 +193,11 @@ public class Follower extends RaftServer {
     }
 
     private void handleClientRequest(RaftMessage.ClientRequest msg) {
-        if (currentLeader != null){
+        if (currentLeader != null) {
+            getContext().getLog().info("FORWARDING REQUEST TO LEADER");
             this.currentLeader.tell(msg);
         }
+        else requestBuffer.add(msg);
     }
 
 

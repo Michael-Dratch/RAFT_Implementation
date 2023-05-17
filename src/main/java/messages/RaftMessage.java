@@ -16,7 +16,7 @@ public interface RaftMessage {
                                 ActorRef<RaftMessage> leaderRef,
                                 int prevLogIndex,
                                 int prevLogTerm,
-                                List<Entry> entries ,
+                                List<Entry> entries,
                                 int leaderCommit
                                 ) implements RaftMessage {}
 

@@ -48,6 +48,8 @@ public class Client extends AbstractBehavior<ClientMessage> {
 
     private int nextRequest;
 
+    private ActorRef<ClientMessage> alertWhenFinished;
+
     private Behavior<ClientMessage> dispatch(ClientMessage message){
         switch (message) {
             case ClientMessage.Start msg:
@@ -58,6 +60,9 @@ public class Client extends AbstractBehavior<ClientMessage> {
                 break;
             case ClientMessage.ClientResponse msg:
                 handleClientResponse(msg);
+                break;
+            case ClientMessage.AlertWhenFinished msg:
+                this.alertWhenFinished = msg.sender();
                 break;
             default:
                 break;
@@ -78,8 +83,11 @@ public class Client extends AbstractBehavior<ClientMessage> {
 
     private void handleClientResponse(ClientMessage.ClientResponse response){
         if (response.success()){
+            getContext().getLog().info("CLIENT RECEIVED REQUEST SUCCESS");
             this.nextRequest++;
-            sendNextRequestToRandomServer();
+            if (this.nextRequest >= this.commandQueue.size())this.alertWhenFinished.tell(new ClientMessage.Finished());
+            else sendNextRequestToRandomServer();
+
         } else{
             sendNextRequestToRandomServer();
         }

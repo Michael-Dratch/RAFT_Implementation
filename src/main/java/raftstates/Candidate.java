@@ -6,6 +6,7 @@ import datapersistence.ServerDataManager;
 import messages.RaftMessage;
 import statemachine.StateMachine;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Candidate extends RaftServer {
@@ -34,6 +35,10 @@ public class Candidate extends RaftServer {
     private int votesReceived;
     private int votesRequired;
 
+    private List<RaftMessage.ClientRequest> requestBuffer;
+
+
+
     protected Candidate(ActorContext<RaftMessage> context,
                         TimerScheduler<RaftMessage> timers,
                         ServerDataManager dataManager,
@@ -51,6 +56,7 @@ public class Candidate extends RaftServer {
         this.dataManager.saveGroupRefs(this.groupRefs);
         votesReceived = 0;
         votesRequired = this.groupRefs.size()/2;
+        requestBuffer = new ArrayList<>();
         startTimer();
     }
 
@@ -60,7 +66,10 @@ public class Candidate extends RaftServer {
             switch (message) {
                 case RaftMessage.AppendEntries msg:
                     if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
-                    else return Follower.create(dataManager, this.stateMachine, this.failFlag);
+                    else {
+                        sendBufferedRequests(msg.leaderRef());
+                        return Follower.create(dataManager, this.stateMachine, this.failFlag);
+                    }
                     break;
                 case RaftMessage.RequestVote msg:
                     if (msg.term() > this.currentTerm)
@@ -74,13 +83,19 @@ public class Candidate extends RaftServer {
                         handleRequestVoteResponse(msg);
                         if (votesReceived >= votesRequired) {
                             getContext().getLog().info("ELECTED TO LEADER");
+                            sendBufferedRequests(getContext().getSelf());
                             return getLeaderBehavior();
                         }
                     }
                     break;
                 case RaftMessage.TimeOut msg:
+                    getContext().getLog().info("CANDIDATE TIMEOUT STARTING NEW ELECTION");
                     handleTimeOut();
                     votesReceived = 0;
+                    break;
+                case RaftMessage.ClientRequest msg:
+                    getContext().getLog().info("RECEIVED CLIENT REQUEST");
+                    handleClientRequest(msg);
                     break;
                 case RaftMessage.Failure msg:   // Used to simulate node failure
                     throw new RuntimeException("Test Failure");
@@ -98,6 +113,16 @@ public class Candidate extends RaftServer {
             return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
         }
 
+    }
+
+    private void sendBufferedRequests(ActorRef<RaftMessage> leader) {
+        for (RaftMessage.ClientRequest request : requestBuffer){
+            leader.tell(request);
+        }
+    }
+
+    private void handleClientRequest(RaftMessage.ClientRequest msg) {
+        requestBuffer.add(msg);
     }
 
     private Behavior<RaftMessage> getLeaderBehavior() {
