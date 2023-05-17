@@ -1,7 +1,10 @@
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorRefResolver;
+import akka.actor.typed.Behavior;
+import akka.actor.typed.PreRestart;
 import akka.actor.typed.javadsl.AbstractBehavior;
 import akka.actor.typed.javadsl.ActorContext;
+import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.TimerScheduler;
 
 import java.time.Duration;
@@ -119,6 +122,17 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         List<Entry> entries = this.log.subList(this.lastApplied + 1, this.commitIndex + 1);
         for (Entry e : entries) this.stateMachine.apply(e.command());
         this.lastApplied = this.commitIndex;
+    }
+
+    protected Behavior<RaftMessage> handlePreRestart(PreRestart signal) {
+        this.failFlag.failed = true;
+        return Behaviors.same();
+    }
+
+    protected void resetTransientState(){
+        this.stateMachine.clearAll();
+        this.commitIndex = -1;
+        this.lastApplied = -1;
     }
 
     private void sendRequestVotesToAllNodes() {

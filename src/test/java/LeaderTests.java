@@ -284,7 +284,10 @@ public class LeaderTests {
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, 1, 1));
         leader.tell(new RaftMessage.Failure());
         leader.tell(new RaftMessage.TestMessage.GetState(probeRef));
-        System.out.println(probe.receiveMessage());
+        leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
+
+
 
 //        Command command = getCommand();
 //        leader.tell(new RaftMessage.ClientRequest(probeRef, command));

@@ -19,9 +19,9 @@ public class Leader extends RaftServer{
                                                List<ActorRef<RaftMessage>> groupRefs,
                                                int commitIndex,
                                                int lastApplied){
-        return Behaviors.<RaftMessage>supervise(
-                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Leader(context, timers, dataManager, stateMachine, failFlag, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
-        ).onFailure(SupervisorStrategy.restart());
+            return Behaviors.<RaftMessage>supervise(
+                    Behaviors.setup(context -> Behaviors.withTimers(timers -> new Leader(context, timers, dataManager, stateMachine, failFlag, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
+            ).onFailure(SupervisorStrategy.restart());
     }
 
     protected Leader(ActorContext<RaftMessage> context,
@@ -39,10 +39,14 @@ public class Leader extends RaftServer{
         this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
         this.dataManager.saveGroupRefs(this.groupRefs);
+        checkFailure();
         initializeNextIndex();
         initializeMatchIndex();
         logEntryClientRefs = new HashMap<>();
         startTimer();
+    }
+
+    private void checkFailure() {
     }
 
 
@@ -77,37 +81,44 @@ public class Leader extends RaftServer{
     private HashMap<Integer, ActorRef<RaftMessage>> logEntryClientRefs;
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
-        switch(message) {
-            case RaftMessage.ClientRequest msg:
-                handleClientRequest(msg);
-                break;
-            case RaftMessage.AppendEntries msg:
-                if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
-                else return Follower.create(dataManager, stateMachine, failFlag);
-                break;
-            case RaftMessage.RequestVote msg:
-                if (msg.term() < this.currentTerm) sendRequestVoteResponse(msg, false);
-                else return Follower.create(dataManager, stateMachine, failFlag);
-                break;
-            case RaftMessage.AppendEntriesResponse msg:
-                if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
-                handleRequestVoteResponse(msg);
-                break;
-            case RaftMessage.RequestVoteResponse msg:
-                if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
-                break;
-            case RaftMessage.TimeOut msg:
-                handleTimeOut();
-                break;
-            case RaftMessage.Failure msg:   // Used to simulate node failure
-                throw new RuntimeException("Test Failure");
-            case RaftMessage.TestMessage msg:
-                handleTestMessage(msg);
-                break;
-            default:
-                break;
+        if (!this.failFlag.failed) {
+            switch (message) {
+                case RaftMessage.ClientRequest msg:
+                    handleClientRequest(msg);
+                    break;
+                case RaftMessage.AppendEntries msg:
+                    if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
+                    else return Follower.create(dataManager, stateMachine, failFlag);
+                    break;
+                case RaftMessage.RequestVote msg:
+                    if (msg.term() < this.currentTerm) sendRequestVoteResponse(msg, false);
+                    else return Follower.create(dataManager, stateMachine, failFlag);
+                    break;
+                case RaftMessage.AppendEntriesResponse msg:
+                    if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
+                    handleRequestVoteResponse(msg);
+                    break;
+                case RaftMessage.RequestVoteResponse msg:
+                    if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
+                    break;
+                case RaftMessage.TimeOut msg:
+                    handleTimeOut();
+                    break;
+                case RaftMessage.Failure msg:   // Used to simulate node failure
+                    throw new RuntimeException("Test Failure");
+                case RaftMessage.TestMessage msg:
+                    handleTestMessage(msg);
+                    break;
+                default:
+                    break;
+            }
+            return this;
+        } else {
+            resetTransientState();
+            this.failFlag.failed = false;
+            getContext().getSelf().tell(message);
+            return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
         }
-        return this;
     }
 
     private void handleClientRequest(RaftMessage.ClientRequest msg) {
@@ -192,14 +203,6 @@ public class Leader extends RaftServer{
         node.tell(new RaftMessage.AppendEntries(this.currentTerm, getContext().getSelf(), -1, -1, new ArrayList<>(), this.commitIndex));
     }
 
-    private Behavior<RaftMessage> handlePreRestart(PreRestart restart) {
-        System.out.println("RESETTING VALUES");
-//        this.stateMachine.clearAll();
-        this.lastApplied = -1;
-        this.commitIndex = -1;
-//        return Follower.create(dataManager, stateMachine);
-        return Behaviors.same();
-    }
 
     private void handleTestMessage(RaftMessage.TestMessage message) {
         switch(message) {
@@ -215,7 +218,6 @@ public class Leader extends RaftServer{
                 msg.sender().tell(new RaftMessage.TestMessage.GetStateMachineCommandsResponse(this.stateMachine.getCommands()));
                 break;
             case RaftMessage.TestMessage.GetState msg:
-                ;
                 msg.sender().tell(new RaftMessage.TestMessage.GetStateResponse(this.currentTerm, this.votedFor, this.log, this.commitIndex, this.lastApplied));
                 break;
             default:

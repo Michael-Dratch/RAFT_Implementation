@@ -1,7 +1,4 @@
-import akka.actor.typed.ActorRef;
-import akka.actor.typed.ActorRefResolver;
-import akka.actor.typed.Behavior;
-import akka.actor.typed.SupervisorStrategy;
+import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
 
 import javax.swing.plaf.nimbus.State;
@@ -27,7 +24,10 @@ public class Candidate extends RaftServer {
 
     @Override
     public Receive<RaftMessage> createReceive() {
-        return newReceiveBuilder().onMessage(RaftMessage.class, this::dispatch).build();
+        return newReceiveBuilder()
+                .onMessage(RaftMessage.class, this::dispatch)
+                .onSignal(PreRestart.class, this::handlePreRestart)
+                .build();
     }
 
     private int votesReceived;
@@ -54,35 +54,46 @@ public class Candidate extends RaftServer {
     }
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
-        switch(message) {
-            case RaftMessage.AppendEntries msg:
-                if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
-                else return Follower.create(dataManager, this.stateMachine, this.failFlag);
-                break;
-            case RaftMessage.RequestVote msg:
-                if (msg.term() > this.currentTerm) return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
-                else sendRequestVoteFailResponse(msg);
-                break;
-            case RaftMessage.RequestVoteResponse msg:
-                if (msg.term() > this.currentTerm) return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
-                else {
-                    handleRequestVoteResponse(msg);
-                    if (votesReceived >= votesRequired) return getLeaderBehavior();
-                }
-                break;
-            case RaftMessage.TimeOut msg:
-                handleTimeOut();
-                votesReceived = 0;
-                break;
-            case RaftMessage.Failure msg:   // Used to simulate node failure
-                throw new RuntimeException("Test Failure");
-            case RaftMessage.TestMessage msg:
-                handleTestMessage(msg);
-                break;
-            default:
-                break;
+        if (!this.failFlag.failed) {
+
+            switch (message) {
+                case RaftMessage.AppendEntries msg:
+                    if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
+                    else return Follower.create(dataManager, this.stateMachine, this.failFlag);
+                    break;
+                case RaftMessage.RequestVote msg:
+                    if (msg.term() > this.currentTerm)
+                        return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
+                    else sendRequestVoteFailResponse(msg);
+                    break;
+                case RaftMessage.RequestVoteResponse msg:
+                    if (msg.term() > this.currentTerm)
+                        return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
+                    else {
+                        handleRequestVoteResponse(msg);
+                        if (votesReceived >= votesRequired) return getLeaderBehavior();
+                    }
+                    break;
+                case RaftMessage.TimeOut msg:
+                    handleTimeOut();
+                    votesReceived = 0;
+                    break;
+                case RaftMessage.Failure msg:   // Used to simulate node failure
+                    throw new RuntimeException("Test Failure");
+                case RaftMessage.TestMessage msg:
+                    handleTestMessage(msg);
+                    break;
+                default:
+                    break;
+            }
+            return this;
+        }else{
+            resetTransientState();
+            this.failFlag.failed = false;
+            getContext().getSelf().tell(message);
+            return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
         }
-        return this;
+
     }
 
     private Behavior<RaftMessage> getLeaderBehavior() {

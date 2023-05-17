@@ -35,6 +35,8 @@ public interface RaftMessage {
 
     public record Failure() implements RaftMessage {}
 
+    public record PostFailure() implements RaftMessage {}
+
 
 
     public interface TestMessage extends RaftMessage{
