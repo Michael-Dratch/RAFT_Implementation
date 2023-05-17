@@ -72,21 +72,21 @@ public class CandidateTests     {
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(probeRef);
         groupRefs.add(probe2.ref());
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, groupRefs, -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(), new FailFlag(), new Object(),1, groupRefs, -1, -1));
         probe.expectMessage(new RaftMessage.RequestVote(2, candidate, -1, -1));
         probe2.expectMessage(new RaftMessage.RequestVote(2, candidate, -1, -1));
     }
 
     @Test
     public void candidateGetsRequestVoteFromOtherNodeSameTermSendsResponseWithFalse(){
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(), 1, new ArrayList<>(), -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(), new FailFlag(), new Object(), 1, new ArrayList<>(), -1, -1));
         candidate.tell(new RaftMessage.RequestVote(1, probeRef, -1, -1));
         probe.expectMessage(new RaftMessage.RequestVoteResponse(1, false));
     }
 
     @Test
     public void candidateGetsRequestVoteFromLaterTermImmediatlyChangesTofollower(){
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(),new FailFlag(), new Object(),1, new ArrayList<>(), -1, -1));
         candidate.tell(new RaftMessage.RequestVote(2, probeRef, -1, -1));
         candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -94,14 +94,14 @@ public class CandidateTests     {
 
     @Test
     public void candidateReceivesOldAppendEntriesReplyFalse(){
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(),new FailFlag(), new Object(),1, new ArrayList<>(), -1, -1));
         candidate.tell(new RaftMessage.AppendEntries(0, probeRef, -1,-1, new ArrayList<>(), -1));
         probe.expectMessage(new RaftMessage.AppendEntriesResponse(candidate, 1, false, -1));
     }
 
     @Test
     public void candidateReceivesAppendEntriesSameTermConvertsToFollower(){
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(),new FailFlag(), new Object(),1, new ArrayList<>(), -1, -1));
         candidate.tell(new RaftMessage.AppendEntries(1, probeRef, -1,-1, new ArrayList<>(), -1));
         candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -114,7 +114,7 @@ public class CandidateTests     {
         groupRefs.add(probeRef);
         groupRefs.add(probeRef);
         groupRefs.add(probeRef);
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, groupRefs, -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(),new FailFlag(), new Object(),1, groupRefs, -1, -1));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
@@ -125,7 +125,7 @@ public class CandidateTests     {
 
     @Test
     public void receivesRequestVoteResponseFromLaterTermImmediatelyBecomesFollower(){
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(), new FailFlag(),new Object(),1, new ArrayList<>(), -1, -1));
         candidate.tell(new RaftMessage.RequestVoteResponse(2, false));
         candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -138,7 +138,7 @@ public class CandidateTests     {
         groupRefs.add(probeRef);
         groupRefs.add(probeRef);
         groupRefs.add(probeRef);
-        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new Object(),1, groupRefs, -1, -1));
+        candidate = testKit.spawn(Candidate.create(new ServerFileWriter(), new CommandList(),new FailFlag(), new Object(),1, groupRefs, -1, -1));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, false));

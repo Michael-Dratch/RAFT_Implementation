@@ -1,63 +1,38 @@
-import akka.actor.TypedActor;
 import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
 
-import java.time.Duration;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 
 import static java.lang.Math.min;
 
 
 public class Follower extends RaftServer {
 
-    public static Behavior<RaftMessage> create(ServerDataManager dataManager){
+    public static Behavior<RaftMessage> create(ServerDataManager dataManager, StateMachine stateMachine, FailFlag failFlag){
         return Behaviors.<RaftMessage>supervise(
-            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager)))
-        ).onFailure(SupervisorStrategy.restart());
-    }
-
-    public static Behavior<RaftMessage> create(ServerDataManager dataManager,
-                                               Object timerKey,
-                                               int currentTerm,
-                                               List<ActorRef<RaftMessage>> groupRefs,
-                                               int commitIndex,
-                                               int lastApplied){
-        return Behaviors.<RaftMessage>supervise(
-                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
+            Behaviors.setup(context -> Behaviors.withTimers(timers -> new Follower(context, timers, dataManager, stateMachine, failFlag)))
         ).onFailure(SupervisorStrategy.restart());
     }
 
 
     @Override
     public Receive<RaftMessage> createReceive() {
-        return newReceiveBuilder().
-                onMessage(RaftMessage.class, this::dispatch)
+        return newReceiveBuilder()
+                .onMessage(RaftMessage.class, this::dispatch)
+                .onSignal(PreRestart.class, this::handlePreRestart)
                 .build();
     }
 
-
-    protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager){
-        super(context, timers, dataManager, -1,-1);
+    private Behavior<RaftMessage> handlePreRestart(PreRestart signal) {
+        this.stateMachine.clearAll();
+        this.commitIndex = -1;
+        this.lastApplied = -1;
+        return Behaviors.same();
     }
 
-    protected Follower(ActorContext<RaftMessage> context,
-                        TimerScheduler<RaftMessage> timers,
-                        ServerDataManager dataManager,
-                        Object timerKey,
-                        int currentTerm,
-                        List<ActorRef<RaftMessage>> groupRefs,
-                        int commitIndex,
-                        int lastApplied){
-        super(context, timers, dataManager, commitIndex, lastApplied);
-        this.currentTerm = currentTerm;
-        this.dataManager.saveCurrentTerm(this.currentTerm);
-        this.TIMER_KEY = timerKey;
-        this.groupRefs = groupRefs;
-        this.dataManager.saveGroupRefs(this.groupRefs);
-        this.currentLeader = null;
-        startTimer();
+
+    protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager, StateMachine stateMachine, FailFlag failFlag){
+        super(context, timers, dataManager, stateMachine, failFlag,  -1,-1);
     }
 
     private ActorRef<RaftMessage> currentLeader;
@@ -79,7 +54,7 @@ public class Follower extends RaftServer {
                 break;
             case RaftMessage.TimeOut msg:
                 handleTimeOut();
-                return Candidate.create(this.dataManager, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
+                return Candidate.create(this.dataManager, this.stateMachine, this.failFlag, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
             case RaftMessage.ClientRequest msg:
                 handleClientRequest(msg);
                 break;
@@ -153,6 +128,7 @@ public class Follower extends RaftServer {
     private void updateCommitIndex(RaftMessage.AppendEntries msg) {
         if (msg.leaderCommit() > this.commitIndex){
             this.commitIndex = min(msg.leaderCommit(), this.log.size() - 1);
+            if (commitIndex != -1) this.applyCommittedEntriesToStateMachine();
         }
     }
 
@@ -199,12 +175,15 @@ public class Follower extends RaftServer {
             case RaftMessage.TestMessage.GetBehavior msg:
                 msg.sender().tell(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
                 break;
+            case RaftMessage.TestMessage.GetStateMachineCommands msg:
+                msg.sender().tell(new RaftMessage.TestMessage.GetStateMachineCommandsResponse(this.stateMachine.getCommands()));
+                break;
             default:
                 break;
         }
     }
 
-    protected void writeEntriesToLogFile(List<Entry> entries){
-        this.dataManager.saveLog(entries);
-    }
+//    protected void writeEntriesToLogFile(List<Entry> entries){
+//        this.dataManager.saveLog(entries);
+//    }
 }

@@ -1,6 +1,4 @@
-import akka.actor.typed.ActorRef;
-import akka.actor.typed.Behavior;
-import akka.actor.typed.SupervisorStrategy;
+import akka.actor.typed.*;
 import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
@@ -14,25 +12,29 @@ import java.util.List;
 public class Leader extends RaftServer{
 
     public static Behavior<RaftMessage> create(ServerDataManager dataManager,
+                                               StateMachine stateMachine,
                                                Object timerKey,
+                                               FailFlag failFlag,
                                                int currentTerm,
                                                List<ActorRef<RaftMessage>> groupRefs,
                                                int commitIndex,
                                                int lastApplied){
         return Behaviors.<RaftMessage>supervise(
-                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Leader(context, timers, dataManager, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
+                Behaviors.setup(context -> Behaviors.withTimers(timers -> new Leader(context, timers, dataManager, stateMachine, failFlag, timerKey, currentTerm, groupRefs, commitIndex, lastApplied)))
         ).onFailure(SupervisorStrategy.restart());
     }
 
     protected Leader(ActorContext<RaftMessage> context,
                         TimerScheduler<RaftMessage> timers,
                         ServerDataManager dataManager,
+                        StateMachine stateMachine,
+                        FailFlag failFlag,
                         Object timerKey,
                         int currentTerm,
                         List<ActorRef<RaftMessage>> groupRefs,
                         int commitIndex,
                         int lastApplied){
-        super(context, timers, dataManager, timerKey, commitIndex, lastApplied);
+        super(context, timers, dataManager, stateMachine, failFlag, timerKey, commitIndex, lastApplied);
         this.currentTerm = currentTerm;
         this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
@@ -60,8 +62,13 @@ public class Leader extends RaftServer{
 
     @Override
     public Receive<RaftMessage> createReceive() {
-        return newReceiveBuilder().onMessage(RaftMessage.class, this::dispatch).build();
+        return newReceiveBuilder()
+                .onMessage(RaftMessage.class, this::dispatch)
+                .onSignal(PreRestart.class, this::handlePreRestart)
+                .build();
     }
+
+
 
     private HashMap<ActorRef<RaftMessage>, Integer> nextIndex;
 
@@ -76,18 +83,18 @@ public class Leader extends RaftServer{
                 break;
             case RaftMessage.AppendEntries msg:
                 if (msg.term() < this.currentTerm) sendAppendEntriesResponse(msg, false);
-                else return Follower.create(dataManager);
+                else return Follower.create(dataManager, stateMachine, failFlag);
                 break;
             case RaftMessage.RequestVote msg:
                 if (msg.term() < this.currentTerm) sendRequestVoteResponse(msg, false);
-                else return Follower.create(dataManager);
+                else return Follower.create(dataManager, stateMachine, failFlag);
                 break;
             case RaftMessage.AppendEntriesResponse msg:
-                if (msg.term() > this.currentTerm) return Follower.create(dataManager);
+                if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
                 handleRequestVoteResponse(msg);
                 break;
             case RaftMessage.RequestVoteResponse msg:
-                if (msg.term() > this.currentTerm) return Follower.create(dataManager);
+                if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
                 break;
             case RaftMessage.TimeOut msg:
                 handleTimeOut();
@@ -132,21 +139,25 @@ public class Leader extends RaftServer{
     private void handleRequestVoteResponse(RaftMessage.AppendEntriesResponse msg) {
         if (msg.success() == true){
             matchIndex.put(msg.sender(), this.log.size());
-            updateCommitIndex(msg.matchIndex());
+            if (isEntryIndexSuccessfullyReplicated(msg.matchIndex())) updateCommitIndex(msg.matchIndex());
         } else {
             nextIndex.put(msg.sender(), nextIndex.get(msg.sender()) - 1);
             sendAppendEntriesToFollower(msg.sender());
         }
     }
 
+    private boolean isEntryIndexSuccessfullyReplicated(int entryIndex) {
+        int numReplicas = getEntryReplicaCount(entryIndex);
+        if (numReplicas >= (groupRefs.size()/2)) return true;
+        else return false;
+    }
+
     private void updateCommitIndex(int entryIndex) {
         if (entryIndex <= this.commitIndex) return;
-        int numReplicas = getEntryReplicaCount(entryIndex);
-        if (numReplicas >= (groupRefs.size()/2)) {
-            int oldCommit = this.commitIndex;
-            this.commitIndex = entryIndex;
-            sendClientResponsesForNewCommittedRequests(oldCommit, this.commitIndex);
-        }
+        this.commitIndex = entryIndex;
+        int prevCommit = this.lastApplied;
+        this.applyCommittedEntriesToStateMachine();
+        sendClientResponsesForNewCommittedRequests(prevCommit, this.commitIndex);
     }
 
     private void sendClientResponsesForNewCommittedRequests(int oldCommit, int newCommit) {
@@ -181,6 +192,15 @@ public class Leader extends RaftServer{
         node.tell(new RaftMessage.AppendEntries(this.currentTerm, getContext().getSelf(), -1, -1, new ArrayList<>(), this.commitIndex));
     }
 
+    private Behavior<RaftMessage> handlePreRestart(PreRestart restart) {
+        System.out.println("RESETTING VALUES");
+//        this.stateMachine.clearAll();
+        this.lastApplied = -1;
+        this.commitIndex = -1;
+//        return Follower.create(dataManager, stateMachine);
+        return Behaviors.same();
+    }
+
     private void handleTestMessage(RaftMessage.TestMessage message) {
         switch(message) {
             case RaftMessage.TestMessage.GetBehavior msg:
@@ -190,6 +210,13 @@ public class Leader extends RaftServer{
                 this.log = msg.entries();
                 this.dataManager.saveLog(this.log);
                 this.initializeNextIndex();
+                break;
+            case RaftMessage.TestMessage.GetStateMachineCommands msg:
+                msg.sender().tell(new RaftMessage.TestMessage.GetStateMachineCommandsResponse(this.stateMachine.getCommands()));
+                break;
+            case RaftMessage.TestMessage.GetState msg:
+                ;
+                msg.sender().tell(new RaftMessage.TestMessage.GetStateResponse(this.currentTerm, this.votedFor, this.log, this.commitIndex, this.lastApplied));
                 break;
             default:
                 break;

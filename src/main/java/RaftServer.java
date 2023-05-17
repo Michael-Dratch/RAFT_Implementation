@@ -5,7 +5,6 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.TimerScheduler;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -16,6 +15,9 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     protected Object TIMER_KEY = new Object();
 
     protected ServerDataManager dataManager;
+    protected StateMachine stateMachine;
+
+    protected FailFlag failFlag;
 
     protected List<ActorRef<RaftMessage>> groupRefs;
 
@@ -33,11 +35,15 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     protected RaftServer(ActorContext<RaftMessage> context,
                         TimerScheduler<RaftMessage> timers,
                         ServerDataManager dataManager,
+                         StateMachine stateMachine,
+                         FailFlag failFlag,
                          int commitIndex,
                          int lastApplied){
         super(context);
         this.timer = timers;
         this.dataManager = dataManager;
+        this.stateMachine = stateMachine;
+        this.failFlag = failFlag;
         this.commitIndex = commitIndex;
         this.lastApplied = lastApplied;
 
@@ -48,6 +54,8 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     protected RaftServer(ActorContext<RaftMessage> context,
                          TimerScheduler<RaftMessage> timers,
                          ServerDataManager dataManager,
+                         StateMachine stateMachine,
+                         FailFlag failFlag,
                          Object timerKey,
                          int commitIndex,
                          int lastApplied){
@@ -55,6 +63,8 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         this.timer = timers;
         this.TIMER_KEY = timerKey;
         this.dataManager = dataManager;
+        this.stateMachine = stateMachine;
+        this.failFlag = failFlag;
         this.commitIndex = commitIndex;
         this.lastApplied = lastApplied;
 
@@ -103,6 +113,12 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
 
     protected void sendRequestVoteResponse(RaftMessage.RequestVote msg, boolean success) {
         msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, success));
+    }
+
+    protected void applyCommittedEntriesToStateMachine(){
+        List<Entry> entries = this.log.subList(this.lastApplied + 1, this.commitIndex + 1);
+        for (Entry e : entries) this.stateMachine.apply(e.command());
+        this.lastApplied = this.commitIndex;
     }
 
     private void sendRequestVotesToAllNodes() {

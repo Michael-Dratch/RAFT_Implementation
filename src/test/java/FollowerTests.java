@@ -183,7 +183,7 @@ public class FollowerTests {
 
     @Test
     public void FollowerHasNoEntryAtPrevLogIndexReturnsFalse(){
-        follower = testKit.spawn(Follower.create(new ServerFileWriter()));
+        follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(), new FailFlag()));
         follower.tell(new RaftMessage.AppendEntries(0, probeRef, 1, 0, new ArrayList<Entry>(), 0));
         assertCorrectAppendEntriesResponse(probe.receiveMessage(), 0, false);
     }
@@ -433,7 +433,7 @@ public class FollowerTests {
     }
     @Test
     public void afterFailureFollowerWithVotedForRecoversVotedFor(){
-        follower = testKit.spawn(Follower.create(new ServerFileWriter()));
+        follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(), new FailFlag()));
         follower.tell(new RaftMessage.RequestVote(1, probe.ref(), 1, 1));
         probe.expectMessage(new RaftMessage.RequestVoteResponse(1, true));
         follower.tell(new RaftMessage.Failure());
@@ -469,12 +469,56 @@ public class FollowerTests {
 
     @Test
     public void clientRequestToFollowerGetsRoutedToLeader(){
-        follower = testKit.spawn(Follower.create(new ServerFileWriter()));
+        follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(),new FailFlag()));
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(follower);
-        ActorRef<RaftMessage> leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(), 1, groupRefs, -1, -1));
+        ActorRef<RaftMessage> leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, -1, -1));
         follower.tell(new RaftMessage.AppendEntries(1, leader,-1, -1, new ArrayList<>(), -1));
         follower.tell(new RaftMessage.ClientRequest(probeRef, new StringCommand(1,1,"Test")));
         probe.expectMessage(new RaftMessage.ClientResponse(true));
+    }
+
+    @Test
+    public void followerApplyEntryToLogAfterCommitIndexReachesEntry(){
+        follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(), new FailFlag()));
+        Entry entry = createEntry(1);
+        List<Entry> entries = new ArrayList<>();
+        entries.add(entry);
+        follower.tell(new RaftMessage.AppendEntries(1,probeRef, -1, -1, entries, -1));
+        probe.receiveMessage();
+        follower.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+        RaftMessage.TestMessage.GetStateMachineCommandsResponse beforeCommit =  (RaftMessage.TestMessage.GetStateMachineCommandsResponse) probe.receiveMessage();
+        assertEquals(0, beforeCommit.commands().size());
+        follower.tell(new RaftMessage.AppendEntries(1, probeRef, 0, 1, new ArrayList<>(), 0));
+        probe.receiveMessage();
+        follower.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+        RaftMessage.TestMessage.GetStateMachineCommandsResponse afterCommit =  (RaftMessage.TestMessage.GetStateMachineCommandsResponse) probe.receiveMessage();
+        assertEquals(1, afterCommit.commands().size());
+        assertEquals(entry.command(), afterCommit.commands().get(0));
+    }
+
+    @Test
+    public void followerFailsCorrectlyRebuildsStateMachineAfterLearningCommitIndex(){
+        follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(), new FailFlag()));
+        List<Entry> entries = new ArrayList<>();
+        entries.add(createEntry(1));
+        entries.add(createEntry(1));
+
+        follower.tell(new RaftMessage.AppendEntries(1,probeRef, -1, -1, entries, 1));
+        probe.receiveMessage();
+        follower.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+        RaftMessage.TestMessage.GetStateMachineCommandsResponse beforeFail =  (RaftMessage.TestMessage.GetStateMachineCommandsResponse) probe.receiveMessage();
+        assertEquals(2, beforeFail.commands().size());
+
+        follower.tell(new RaftMessage.Failure());
+        follower.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+        RaftMessage.TestMessage.GetStateMachineCommandsResponse afterFail =  (RaftMessage.TestMessage.GetStateMachineCommandsResponse) probe.receiveMessage();
+        assertEquals(0, afterFail.commands().size());
+
+        follower.tell(new RaftMessage.AppendEntries(1, probeRef, 0, 1, new ArrayList<>(), 1));
+        probe.receiveMessage();
+        follower.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+        RaftMessage.TestMessage.GetStateMachineCommandsResponse afterCommit =  (RaftMessage.TestMessage.GetStateMachineCommandsResponse) probe.receiveMessage();
+        assertEquals(2, afterCommit.commands().size());
     }
 }

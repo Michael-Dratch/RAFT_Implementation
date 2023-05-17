@@ -57,7 +57,7 @@ public class LeaderTests {
     }
 
     private static ActorRef<RaftMessage> getLeader(List<ActorRef<RaftMessage>> groupRefs, int term) {
-        return testKit.spawn(Leader.create(new ServerFileWriter(), new Object(), term, groupRefs, -1, -1));
+        return testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(), term, groupRefs, -1, -1));
     }
 
     private void deleteDirectory(File directory){
@@ -98,7 +98,7 @@ public class LeaderTests {
 
     @Test
     public void receivesAppendEntriesFromLaterTermBecomesFollower(){
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
         leader.tell(new RaftMessage.AppendEntries(2, probeRef, -1, -1, new ArrayList<>(), -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -106,7 +106,7 @@ public class LeaderTests {
 
     @Test
     public void receivesAppendEntriesFromSameTermBecomesFollower(){
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
         leader.tell(new RaftMessage.AppendEntries(2, probeRef, -1, -1, new ArrayList<>(), -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -114,7 +114,7 @@ public class LeaderTests {
 
     @Test
     public void receivesAppendEntriesFromEarlierTermStaysLeader(){
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
         leader.tell(new RaftMessage.AppendEntries(0, probeRef, -1, -1, new ArrayList<>(), -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         List<RaftMessage> responses = probe.receiveSeveralMessages(2);
@@ -124,7 +124,7 @@ public class LeaderTests {
 
     @Test
     public void receivesRequestVoteFromLaterTermSwitchesToFollower(){
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
         leader.tell(new RaftMessage.RequestVote(2, probeRef, -1, -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -132,7 +132,7 @@ public class LeaderTests {
 
     @Test
     public void receivesAppendEntriesReponseFromLaterTermSwitchesToFollower(){
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(),1, new ArrayList<>(), -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
         leader.tell(new RaftMessage.AppendEntriesResponse(probeRef, 2, false, 0));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
@@ -237,7 +237,7 @@ public class LeaderTests {
     public void receiveMinoritySuccessfulAppendEntriesNoResponseToClient() {
         List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
         List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(), 1, groupRefs, -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(), 1, groupRefs, -1, -1));
         leader.tell(new RaftMessage.ClientRequest(probeRef, getCommand()));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 1));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, false, 0));
@@ -250,7 +250,7 @@ public class LeaderTests {
     public void receiveMajoritySuccessfulAppendEntriesLeaderRespondsToClient() {
         List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
         List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
-        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new Object(), 1, groupRefs, -1, -1));
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(),1, groupRefs, -1, -1));
         leader.tell(new RaftMessage.ClientRequest(probeRef, getCommand()));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
@@ -258,10 +258,63 @@ public class LeaderTests {
     }
 
 
-//    @Test
-//    public void receiveMajoritySuccessfulAppendEntriesSendResponseToClient(){
+    @Test
+    public void leaderAppliesEntryToStateMachineAfterCommitting(){
+        List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
+        List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(), 1, groupRefs, -1, -1));
+        Command command = getCommand();
+        leader.tell(new RaftMessage.ClientRequest(probeRef, command));
+        leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
+        leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
+        probe.expectMessage(new RaftMessage.ClientResponse(true));
+        leader.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+        List<Command> expectedCommands = new ArrayList<>();
+        expectedCommands.add(command);
+        probe.expectMessage(new RaftMessage.TestMessage.GetStateMachineCommandsResponse(expectedCommands));
+    }
+
+    @Test
+    public void leaderBecomesFollowerOnFailure(){
+
+
+
+        List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
+        List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
+        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, 1, 1));
+        leader.tell(new RaftMessage.Failure());
+        leader.tell(new RaftMessage.TestMessage.GetState(probeRef));
+        System.out.println(probe.receiveMessage());
+
+//        Command command = getCommand();
+//        leader.tell(new RaftMessage.ClientRequest(probeRef, command));
+//        leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
+//        leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
+//        probe.expectMessage(new RaftMessage.ClientResponse(true));
+//        leader.tell(new RaftMessage.TestMessage.GetState(probeRef));
+//        System.out.println(probe.receiveMessage());
 //
-//    }
+//
+//
+//        leader.tell(new RaftMessage.Failure());
+//        leader.tell(new RaftMessage.TestMessage.GetState(probeRef));
+//        System.out.println(probe.receiveMessage());
+//        leader.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
+//        System.out.println(probe.receiveMessage());
+
+//        List<Command> expectedCommands = new ArrayList<>();
+//        expectedCommands.add(command);
+//        probe.expectMessage(new RaftMessage.TestMessage.GetStateMachineCommandsResponse(expectedCommands));
+
+
+//        List<TestProbe<RaftMessage>> probes = getProbeGroup(1);
+//        List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
+//        leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), 1, groupRefs, -1, -1));
+//
+//        leader.tell(new RaftMessage.Failure());
+//        leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
+//        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
+    }
 
 
 }
