@@ -78,7 +78,7 @@ public class Leader extends RaftServer{
 
     private HashMap<ActorRef<RaftMessage>, Integer> matchIndex;
 
-    private HashMap<Integer, ActorRef<RaftMessage>> logEntryClientRefs;
+    private HashMap<Integer, ActorRef<ClientMessage>> logEntryClientRefs;
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
         if (!this.failFlag.failed) {
@@ -165,6 +165,7 @@ public class Leader extends RaftServer{
 
     private void updateCommitIndex(int entryIndex) {
         if (entryIndex <= this.commitIndex) return;
+        getContext().getLog().info("Up to entry " + entryIndex + " committed");
         this.commitIndex = entryIndex;
         int prevCommit = this.lastApplied;
         this.applyCommittedEntriesToStateMachine();
@@ -173,8 +174,8 @@ public class Leader extends RaftServer{
 
     private void sendClientResponsesForNewCommittedRequests(int oldCommit, int newCommit) {
         for (int i = oldCommit + 1; i <= newCommit; i++){
-            ActorRef<RaftMessage> clientRef = this.logEntryClientRefs.get(i);
-            clientRef.tell(new RaftMessage.ClientResponse(true));
+            ActorRef<ClientMessage> clientRef = this.logEntryClientRefs.get(i);
+            clientRef.tell(new ClientMessage.ClientResponse(true));
         }
     }
 

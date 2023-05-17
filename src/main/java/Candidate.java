@@ -71,7 +71,10 @@ public class Candidate extends RaftServer {
                         return Follower.create(this.dataManager, this.stateMachine, this.failFlag);
                     else {
                         handleRequestVoteResponse(msg);
-                        if (votesReceived >= votesRequired) return getLeaderBehavior();
+                        if (votesReceived >= votesRequired) {
+                            getContext().getLog().info("ELECTED TO LEADER");
+                            return getLeaderBehavior();
+                        }
                     }
                     break;
                 case RaftMessage.TimeOut msg:

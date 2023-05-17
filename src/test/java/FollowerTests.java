@@ -469,13 +469,14 @@ public class FollowerTests {
 
     @Test
     public void clientRequestToFollowerGetsRoutedToLeader(){
+        TestProbe<ClientMessage> client = testKit.createTestProbe();
         follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(),new FailFlag()));
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(follower);
         ActorRef<RaftMessage> leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, -1, -1));
         follower.tell(new RaftMessage.AppendEntries(1, leader,-1, -1, new ArrayList<>(), -1));
-        follower.tell(new RaftMessage.ClientRequest(probeRef, new StringCommand(1,1,"Test")));
-        probe.expectMessage(new RaftMessage.ClientResponse(true));
+        follower.tell(new RaftMessage.ClientRequest(client.ref(), new StringCommand(1,1,"Test")));
+        client.expectMessage(new ClientMessage.ClientResponse(true));
     }
 
     @Test

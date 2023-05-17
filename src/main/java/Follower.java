@@ -49,6 +49,7 @@ public class Follower extends RaftServer {
                     break;
                 case RaftMessage.TimeOut msg:
                     handleTimeOut();
+                    getContext().getLog().info("TIMEOUT STARTING ELECTION");
                     return Candidate.create(this.dataManager, this.stateMachine, this.failFlag, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
                 case RaftMessage.ClientRequest msg:
                     handleClientRequest(msg);
