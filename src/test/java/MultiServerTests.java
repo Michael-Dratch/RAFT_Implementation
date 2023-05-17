@@ -13,6 +13,7 @@ import statemachine.Command;
 import statemachine.CommandList;
 import statemachine.StringCommand;
 import java.time.Duration;
+import static org.junit.Assert.assertEquals;
 
 
 import java.io.File;
@@ -85,6 +86,29 @@ public class MultiServerTests {
         }
     }
 
+    private TestProbe<ClientMessage> probe;
+
+    private static void sendShutDownMessages(List<ActorRef<RaftMessage>> groupRefs) {
+        for (ActorRef<RaftMessage> server: groupRefs){
+            server.tell(new RaftMessage.ShutDown());
+        }
+    }
+
+    private static void assertCorrectOrderOfServerStateMachineCommands(List<RaftMessage> responses) {
+        for (RaftMessage r : responses){
+            List<Command> serverState = ((RaftMessage.TestMessage.GetStateMachineCommandsResponse) r).commands();
+            for (int i = 0; i < serverState.size(); i++){
+                assertEquals(i, serverState.get(i).getCommandID());
+            }
+        }
+    }
+
+    private static void sendGetStateMachineMessages(List<ActorRef<RaftMessage>> groupRefs, TestProbe<RaftMessage> probe2) {
+        for (ActorRef<RaftMessage> server : groupRefs){
+            server.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probe2.ref()));
+        }
+    }
+
     @BeforeClass
     public static void classSetUp(){
         testKit = ActorTestKit.create();
@@ -97,24 +121,35 @@ public class MultiServerTests {
 
     @Before
     public void setUp(){
+        probe = testKit.createTestProbe();
+
     }
 
     @After
     public void tearDown(){
-        clearDataDirectory();
+      clearDataDirectory();
     }
 
     @Test
-    public void oneClientNoFailures4ServersSuccessfullyCommitsAllEntries(){
-        TestProbe<ClientMessage> probe = testKit.createTestProbe();
-        List<String> commands = getCommandList(50);
+    public void oneClientNoFailures4ServersSuccessfullyCommitsAllEntries() throws InterruptedException {
+        List<String> commands = getCommandList(20);
         List<ActorRef<RaftMessage>> groupRefs = createServerGroup(4);
         sendGroupRefsToServers(groupRefs);
         startServerGroup(groupRefs);
+
         ActorRef<ClientMessage> client = testKit.spawn(Client.create(groupRefs,commands));
         client.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
         client.tell(new ClientMessage.Start());
-        probe.expectMessage(Duration.ofSeconds(5), new ClientMessage.Finished());
+        probe.expectMessage(new ClientMessage.Finished());
+
+        TestProbe<RaftMessage> probe2 = testKit.createTestProbe();
+        sendGetStateMachineMessages(groupRefs, probe2);
+        List<RaftMessage> responses = probe2.receiveSeveralMessages(4);
+        assertCorrectOrderOfServerStateMachineCommands(responses);
+        sendShutDownMessages(groupRefs);
+        probe.expectNoMessage();
     }
 }
+
+
 

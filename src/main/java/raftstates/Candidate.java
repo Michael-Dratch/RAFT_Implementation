@@ -99,6 +99,8 @@ public class Candidate extends RaftServer {
                     break;
                 case RaftMessage.Failure msg:   // Used to simulate node failure
                     throw new RuntimeException("Test Failure");
+                case RaftMessage.ShutDown msg:
+                    return Behaviors.stopped();
                 case RaftMessage.TestMessage msg:
                     handleTestMessage(msg);
                     break;

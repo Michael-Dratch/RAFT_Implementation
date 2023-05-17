@@ -55,9 +55,6 @@ public class Client extends AbstractBehavior<ClientMessage> {
             case ClientMessage.Start msg:
                 start();
                 break;
-            case ClientMessage.TimeOut msg:
-                handleTimeOut();
-                break;
             case ClientMessage.ClientResponse msg:
                 handleClientResponse(msg);
                 break;
@@ -83,12 +80,13 @@ public class Client extends AbstractBehavior<ClientMessage> {
 
     private void handleClientResponse(ClientMessage.ClientResponse response){
         if (response.success()){
-            getContext().getLog().info("CLIENT RECEIVED REQUEST SUCCESS");
+            getContext().getLog().info("CLIENT RECEIVED RESPONSE SUCCESS");
             this.nextRequest++;
             if (this.nextRequest >= this.commandQueue.size())this.alertWhenFinished.tell(new ClientMessage.Finished());
             else sendNextRequestToRandomServer();
 
         } else{
+            getContext().getLog().info("CLIENT RECEIVED RESPONSE FAILED");
             sendNextRequestToRandomServer();
         }
     }
@@ -97,10 +95,6 @@ public class Client extends AbstractBehavior<ClientMessage> {
         Random rand = new Random();
         rand.setSeed(System.currentTimeMillis());
        return rand.nextInt(serverRefs.size());
-    }
-
-    private void handleTimeOut(){
-        sendNextRequestToRandomServer();
     }
 
     private void startTimer() {

@@ -49,6 +49,7 @@ public class Leader extends RaftServer {
         initializeNextIndex();
         initializeMatchIndex();
         logEntryClientRefs = new HashMap<>();
+        sendHeartBeats();
         startTimer();
     }
 
@@ -102,7 +103,7 @@ public class Leader extends RaftServer {
                     break;
                 case RaftMessage.AppendEntriesResponse msg:
                     if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
-                    handleRequestVoteResponse(msg);
+                    handleAppendEntriesResponse(msg);
                     break;
                 case RaftMessage.RequestVoteResponse msg:
                     if (msg.term() > this.currentTerm) return Follower.create(dataManager, stateMachine, failFlag);
@@ -112,6 +113,8 @@ public class Leader extends RaftServer {
                     break;
                 case RaftMessage.Failure msg:   // Used to simulate node failure
                     throw new RuntimeException("Test Failure");
+                case RaftMessage.ShutDown msg:
+                    return Behaviors.stopped();
                 case RaftMessage.TestMessage msg:
                     handleTestMessage(msg);
                     break;
@@ -153,9 +156,10 @@ public class Leader extends RaftServer {
 
     }
 
-    private void handleRequestVoteResponse(RaftMessage.AppendEntriesResponse msg) {
+    private void handleAppendEntriesResponse(RaftMessage.AppendEntriesResponse msg) {
         if (msg.success() == true){
-            matchIndex.put(msg.sender(), this.log.size());
+            if (msg.matchIndex() > matchIndex.get(msg.sender())) matchIndex.put(msg.sender(), msg.matchIndex());
+
             if (isEntryIndexSuccessfullyReplicated(msg.matchIndex())) updateCommitIndex(msg.matchIndex());
         } else {
             nextIndex.put(msg.sender(), nextIndex.get(msg.sender()) - 1);
@@ -200,14 +204,14 @@ public class Leader extends RaftServer {
 
     @Override
     protected void handleTimeOut() {
-        for (ActorRef<RaftMessage> node: groupRefs){
-            sendHeartBeatMessage(node);
-        }
+        sendHeartBeats();
         startTimer();
     }
 
-    private void sendHeartBeatMessage(ActorRef<RaftMessage> node) {
-        node.tell(new RaftMessage.AppendEntries(this.currentTerm, getContext().getSelf(), -1, -1, new ArrayList<>(), this.commitIndex));
+    private void sendHeartBeats() {
+        for (ActorRef<RaftMessage> node: groupRefs){
+            node.tell(new RaftMessage.AppendEntries(this.currentTerm, getContext().getSelf(), -1, -1, new ArrayList<>(), this.commitIndex));
+        }
     }
 
 

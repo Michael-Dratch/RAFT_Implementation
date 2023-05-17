@@ -77,6 +77,10 @@ public class LeaderTests {
         }
         directory.delete();
     }
+    private RaftMessage.AppendEntries getHeartBeatMessage(int term, ActorRef<RaftMessage> leader, int leaderCommit) {
+        return new RaftMessage.AppendEntries(term, leader, -1, -1, new ArrayList<>(), leaderCommit);
+    }
+
     private StringCommand getCommand() {
         return new StringCommand(1, 1, "TEST");
     }
@@ -107,7 +111,7 @@ public class LeaderTests {
     @Test
     public void receivesAppendEntriesFromLaterTermBecomesFollower(){
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
-        leader.tell(new RaftMessage.AppendEntries(2, probeRef, -1, -1, new ArrayList<>(), -1));
+        leader.tell(getHeartBeatMessage(2, probeRef, -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
     }
@@ -115,7 +119,7 @@ public class LeaderTests {
     @Test
     public void receivesAppendEntriesFromSameTermBecomesFollower(){
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
-        leader.tell(new RaftMessage.AppendEntries(2, probeRef, -1, -1, new ArrayList<>(), -1));
+        leader.tell(getHeartBeatMessage(2, probeRef, -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
     }
@@ -123,7 +127,7 @@ public class LeaderTests {
     @Test
     public void receivesAppendEntriesFromEarlierTermStaysLeader(){
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(),1, new ArrayList<>(), -1, -1));
-        leader.tell(new RaftMessage.AppendEntries(0, probeRef, -1, -1, new ArrayList<>(), -1));
+        leader.tell(getHeartBeatMessage(0, probeRef, -1));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         List<RaftMessage> responses = probe.receiveSeveralMessages(2);
         RaftMessage.TestMessage.GetBehaviorResponse res = (RaftMessage.TestMessage.GetBehaviorResponse) responses.get(1);
@@ -160,7 +164,7 @@ public class LeaderTests {
         List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
         leader = getLeader(groupRefs, 1);
         for (TestProbe<RaftMessage> probe: probes){
-            probe.expectMessage(new RaftMessage.AppendEntries(1, leader, -1, -1, new ArrayList<>(), -1));
+            probe.expectMessage(getHeartBeatMessage(1, leader, -1));
         }
     }
 
@@ -173,6 +177,9 @@ public class LeaderTests {
         leader.tell(new RaftMessage.ClientRequest(client.ref(), command));
         List<Entry> expectedEntries = new ArrayList<>();
         expectedEntries.add(new Entry(1, command));
+        int term = 1;
+        int leaderCommit = -1;
+        probe.expectMessage(getHeartBeatMessage(term, leader, leaderCommit));
         probe.expectMessage(new RaftMessage.AppendEntries(1,leader, -1,-1, expectedEntries, -1));
     }
 
@@ -187,6 +194,7 @@ public class LeaderTests {
         leader.tell(new RaftMessage.ClientRequest(null, command));
         List<Entry> expectedEntries = new ArrayList<>();
         expectedEntries.add(new Entry(2, command));
+        probe.expectMessage(getHeartBeatMessage(2, leader, -1));
         probe.expectMessage(new RaftMessage.AppendEntries(2, leader, 0, 1, expectedEntries, -1));
     }
 
@@ -206,6 +214,7 @@ public class LeaderTests {
         List<Entry> expectedEntries = new ArrayList<>();
         expectedEntries.add(new Entry(2, command));
 
+        probe.expectMessage(getHeartBeatMessage(2, leader,-1));
         probe.expectMessage(new RaftMessage.AppendEntries(2, leader, 0, 1, expectedEntries, -1));
         leader.tell(new RaftMessage.AppendEntriesResponse(probeRef, 2, false, 0));
         expectedEntries.add(0, entry1);
@@ -232,6 +241,7 @@ public class LeaderTests {
         List<Entry> expectedEntries = new ArrayList<>();
         expectedEntries.add(new Entry(2, command));
 
+        probe.expectMessage(getHeartBeatMessage(2, leader, -1));
         probe.expectMessage(new RaftMessage.AppendEntries(2, leader, 2, 2, expectedEntries, -1));
         leader.tell(new RaftMessage.AppendEntriesResponse(probeRef, 2, false, 0));
         expectedEntries.add(0, entry3);
@@ -289,9 +299,6 @@ public class LeaderTests {
 
     @Test
     public void leaderBecomesFollowerOnFailure(){
-
-
-
         List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
         List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, 1, 1));
@@ -299,37 +306,6 @@ public class LeaderTests {
         leader.tell(new RaftMessage.TestMessage.GetState(probeRef));
         leader.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
         probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
-
-
-
-//        statemachine.Command command = getCommand();
-//        leader.tell(new messages.RaftMessage.ClientRequest(probeRef, command));
-//        leader.tell(new messages.RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
-//        leader.tell(new messages.RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
-//        probe.expectMessage(new messages.RaftMessage.ClientResponse(true));
-//        leader.tell(new messages.RaftMessage.TestMessage.GetState(probeRef));
-//        System.out.println(probe.receiveMessage());
-//
-//
-//
-//        leader.tell(new messages.RaftMessage.Failure());
-//        leader.tell(new messages.RaftMessage.TestMessage.GetState(probeRef));
-//        System.out.println(probe.receiveMessage());
-//        leader.tell(new messages.RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
-//        System.out.println(probe.receiveMessage());
-
-//        List<statemachine.Command> expectedCommands = new ArrayList<>();
-//        expectedCommands.add(command);
-//        probe.expectMessage(new messages.RaftMessage.TestMessage.GetStateMachineCommandsResponse(expectedCommands));
-
-
-//        List<TestProbe<messages.RaftMessage>> probes = getProbeGroup(1);
-//        List<ActorRef<messages.RaftMessage>> groupRefs = getProbeGroupRefs(probes);
-//        leader = testKit.spawn(raftstates.Leader.create(new datapersistence.ServerFileWriter(), new statemachine.CommandList(), new Object(), 1, groupRefs, -1, -1));
-//
-//        leader.tell(new messages.RaftMessage.Failure());
-//        leader.tell(new messages.RaftMessage.TestMessage.GetBehavior(probeRef));
-//        probe.expectMessage(new messages.RaftMessage.TestMessage.GetBehaviorResponse("FOLLOWER"));
     }
 
 

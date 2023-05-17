@@ -4,11 +4,9 @@ import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
 import datapersistence.ServerDataManager;
 import messages.RaftMessage;
-import statemachine.Entry;
 import statemachine.StateMachine;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static java.lang.Math.min;
@@ -73,6 +71,8 @@ public class Follower extends RaftServer {
                     break;
                 case RaftMessage.Failure msg:   // Used to simulate node failure
                     throw new RuntimeException("Test Failure");
+                case RaftMessage.ShutDown msg:
+                    return Behaviors.stopped();
                 default:
                     break;
             }

@@ -148,8 +148,9 @@ public class CandidateTests     {
         candidate.tell(new RaftMessage.RequestVoteResponse(1, true));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
         candidate.tell(new RaftMessage.RequestVoteResponse(1, false));
-        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probeRef));
-        probe.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("LEADER"));
+        TestProbe<RaftMessage> probe2 = testKit.createTestProbe();
+        candidate.tell(new RaftMessage.TestMessage.GetBehavior(probe2.ref()));
+        probe2.expectMessage(new RaftMessage.TestMessage.GetBehaviorResponse("LEADER"));
     }
 
 
