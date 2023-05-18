@@ -5,6 +5,7 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.javadsl.TimerScheduler;
+import com.sun.security.jgss.GSSUtil;
 import datapersistence.ServerDataManager;
 import statemachine.StateMachine;
 
@@ -45,15 +46,13 @@ public class Leader extends RaftServer {
         this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
         this.dataManager.saveGroupRefs(this.groupRefs);
-        checkFailure();
+        this.refResolver = ActorRefResolver.get(getContext().getSystem());
         initializeNextIndex();
         initializeMatchIndex();
-        logEntryClientRefs = new HashMap<>();
+        ActorRefResolver refResolver = ActorRefResolver.get(context.getSystem());
         sendHeartBeats();
         startTimer();
-    }
-
-    private void checkFailure() {
+        System.out.println("LEADER RESTARTING");
     }
 
 
@@ -85,7 +84,8 @@ public class Leader extends RaftServer {
 
     private HashMap<ActorRef<RaftMessage>, Integer> matchIndex;
 
-    private HashMap<Integer, ActorRef<ClientMessage>> logEntryClientRefs;
+    private ActorRefResolver refResolver;
+
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
         if (!this.failFlag.failed) {
@@ -131,14 +131,17 @@ public class Leader extends RaftServer {
     }
 
     private void handleClientRequest(RaftMessage.ClientRequest msg) {
+        getContext().getLog().info("LEADER Receiving client request leaderID: " + getContext().getSelf().path().uid());
         Entry entry = new Entry(this.currentTerm, msg.command());
-        this.log.add(entry);
-        this.dataManager.saveLog(this.log);
-        this.logEntryClientRefs.put(this.log.indexOf(entry), msg.clientRef());
+        if (!isDuplicate(msg)) {
+            this.log.add(entry);
+            this.dataManager.saveLog(this.log);
+        }
         for (ActorRef<RaftMessage> node: groupRefs){
             sendAppendEntriesToFollower(node);
         }
     }
+
 
     private void sendAppendEntriesToFollower(ActorRef<RaftMessage> follower) {
         int nodeNextIndex = this.nextIndex.get(follower);
@@ -159,7 +162,6 @@ public class Leader extends RaftServer {
     private void handleAppendEntriesResponse(RaftMessage.AppendEntriesResponse msg) {
         if (msg.success() == true){
             if (msg.matchIndex() > matchIndex.get(msg.sender())) matchIndex.put(msg.sender(), msg.matchIndex());
-
             if (isEntryIndexSuccessfullyReplicated(msg.matchIndex())) updateCommitIndex(msg.matchIndex());
         } else {
             nextIndex.put(msg.sender(), nextIndex.get(msg.sender()) - 1);
@@ -184,8 +186,9 @@ public class Leader extends RaftServer {
 
     private void sendClientResponsesForNewCommittedRequests(int oldCommit, int newCommit) {
         for (int i = oldCommit + 1; i <= newCommit; i++){
-            ActorRef<ClientMessage> clientRef = this.logEntryClientRefs.get(i);
-            clientRef.tell(new ClientMessage.ClientResponse(true));
+            ActorRef<ClientMessage> client =  refResolver.resolveActorRef(this.log.get(i).command().getClientRef());
+            System.out.println(client);
+            client.tell(new ClientMessage.ClientResponse(true, this.log.get(i).command().getCommandID()));
         }
     }
 

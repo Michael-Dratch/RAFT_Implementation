@@ -127,11 +127,11 @@ public class MultiServerTests {
 
     @After
     public void tearDown(){
-      clearDataDirectory();
+      //clearDataDirectory();
     }
 
     @Test
-    public void oneClientNoFailures4ServersSuccessfullyCommitsAllEntries() throws InterruptedException {
+    public void oneClientNoFailures4ServersSuccessfullyCommitsAllEntries() {
         List<String> commands = getCommandList(20);
         List<ActorRef<RaftMessage>> groupRefs = createServerGroup(4);
         sendGroupRefsToServers(groupRefs);
@@ -148,6 +148,20 @@ public class MultiServerTests {
         assertCorrectOrderOfServerStateMachineCommands(responses);
         sendShutDownMessages(groupRefs);
         probe.expectNoMessage();
+    }
+
+    @Test
+    public void oneClientRandomFailures4ServersSuccessfullyCommitsAllEntries(){
+        List<String> commands = getCommandList(20);
+        List<ActorRef<RaftMessage>> groupRefs = createServerGroup(4);
+        sendGroupRefsToServers(groupRefs);
+        startServerGroup(groupRefs);
+
+        ActorRef<ClientMessage> client = testKit.spawn(Client.create(groupRefs,commands));
+        client.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
+        client.tell(new ClientMessage.StartFailMode(4, 1));
+        probe.expectMessage(Duration.ofSeconds(10), new ClientMessage.Finished());
+
     }
 }
 

@@ -1,6 +1,7 @@
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorRefResolver;
 import datapersistence.ServerFileWriter;
 import messages.ClientMessage;
 import messages.RaftMessage;
@@ -27,6 +28,10 @@ public class LeaderTests {
 
     ActorRef<RaftMessage> probeRef;
 
+    TestProbe<ClientMessage> clientProbe;
+
+    static ActorRefResolver refResolver;
+
     private  List<ActorRef<RaftMessage>> getSingleProbeGroupRefs() {
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(probeRef);
@@ -50,8 +55,8 @@ public class LeaderTests {
         return groupRefs;
     }
 
-    private static Entry getEntry(int term) {
-        return new Entry(term, new StringCommand(1, 1, "Test"));
+    private Entry getEntry(int term) {
+        return new Entry(term, new StringCommand(refResolver.toSerializationFormat(this.clientProbe.ref()), 1, "Test"));
     }
 
     private void clearDataDirectory(){
@@ -82,12 +87,13 @@ public class LeaderTests {
     }
 
     private StringCommand getCommand() {
-        return new StringCommand(1, 1, "TEST");
+        return new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()), 1, "TEST");
     }
 
     @BeforeClass
     public static void classSetUp(){
         testKit = ActorTestKit.create();
+        refResolver = ActorRefResolver.get(testKit.system());
     }
 
     @AfterClass
@@ -99,6 +105,7 @@ public class LeaderTests {
     public void setUp(){
         probe = testKit.createTestProbe();
         probeRef = probe.ref();
+        clientProbe = testKit.createTestProbe();
     }
 
     @After
@@ -276,7 +283,7 @@ public class LeaderTests {
         leader.tell(new RaftMessage.ClientRequest(client.ref(), getCommand()));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
-        client.expectMessage(new ClientMessage.ClientResponse(true));
+        client.expectMessage(new ClientMessage.ClientResponse(true, 0));
     }
 
 
@@ -290,7 +297,7 @@ public class LeaderTests {
         leader.tell(new RaftMessage.ClientRequest(client.ref(), command));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
-        client.expectMessage(new ClientMessage.ClientResponse(true));
+        client.expectMessage(new ClientMessage.ClientResponse(true, 0));
         leader.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
         List<Command> expectedCommands = new ArrayList<>();
         expectedCommands.add(command);

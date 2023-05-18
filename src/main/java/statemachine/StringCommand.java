@@ -1,28 +1,30 @@
 package statemachine;
 
+import akka.actor.typed.ActorRef;
+import messages.ClientMessage;
 import statemachine.Command;
 
 import java.io.Serializable;
 
 public class StringCommand implements Command, Serializable {
-    private int clientID;
+    private String clientRef;
     private int commandID;
     private String value;
 
-    public StringCommand(int clientID, int commandID, String value){
-        this.clientID = clientID;
+    public StringCommand(String serializableClientRef, int commandID, String value){
+        this.clientRef = serializableClientRef;
         this.commandID = commandID;
         this.value = value;
     }
 
     @Override
     public boolean equals(Command other){
-        return this.clientID == other.getClientID() && this.commandID == other.getCommandID();
+        return this.clientRef == other.getClientRef() && this.commandID == other.getCommandID();
     }
 
     @Override
-    public int getClientID() {
-        return this.clientID;
+    public String getClientRef() {
+        return this.clientRef;
     }
 
     @Override

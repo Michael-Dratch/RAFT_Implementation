@@ -82,7 +82,7 @@ public class Candidate extends RaftServer {
                     else {
                         handleRequestVoteResponse(msg);
                         if (votesReceived >= votesRequired) {
-                            getContext().getLog().info("ELECTED TO LEADER");
+                            getContext().getLog().info("ELECTED TO LEADER " + getContext().getSelf().path().uid());
                             sendBufferedRequests(getContext().getSelf());
                             return getLeaderBehavior();
                         }

@@ -1,6 +1,7 @@
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorRefResolver;
 import datapersistence.ServerFileWriter;
 import messages.ClientMessage;
 import messages.RaftMessage;
@@ -28,6 +29,10 @@ public class FollowerTests {
     TestProbe<RaftMessage> probe;
 
     ActorRef<RaftMessage> probeRef;
+
+    static TestProbe<ClientMessage> clientProbe;
+
+    static ActorRefResolver refResolver;
 
 
     private static void assertCorrectAppendEntriesResponse(RaftMessage response, int expectedTerm, boolean expectedSuccess) {
@@ -84,8 +89,8 @@ public class FollowerTests {
         }
     }
 
-    private static Entry createEntry(int term) {
-        return new Entry(term, new StringCommand(0, 0, ""));
+    private Entry createEntry(int term) {
+        return new Entry(term, new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()), 0, ""));
     }
 
     private void deleteActorDirectory() {
@@ -160,6 +165,8 @@ public class FollowerTests {
     @BeforeClass
     public static void classSetUp(){
         testKit = ActorTestKit.create();
+        clientProbe = testKit.createTestProbe();
+        refResolver = ActorRefResolver.get(testKit.system());
     }
 
     @AfterClass
@@ -481,8 +488,8 @@ public class FollowerTests {
         groupRefs.add(follower);
         ActorRef<RaftMessage> leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, -1, -1));
         follower.tell(new RaftMessage.AppendEntries(1, leader,-1, -1, new ArrayList<>(), -1));
-        follower.tell(new RaftMessage.ClientRequest(client.ref(), new StringCommand(1,1,"Test")));
-        client.expectMessage(new ClientMessage.ClientResponse(true));
+        follower.tell(new RaftMessage.ClientRequest(client.ref(), new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()),1,"Test")));
+        client.expectMessage(new ClientMessage.ClientResponse(true, 0));
     }
 
     @Test

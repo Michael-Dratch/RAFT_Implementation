@@ -101,7 +101,7 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         Random rand = new Random();
         rand.setSeed(getContext().getSelf().path().uid());
         int randomNum = rand.nextInt(200);
-        this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(200 + randomNum));
+        this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(300 + randomNum));
     }
 
     protected void handleTimeOut() {
@@ -157,5 +157,15 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     private int getLastLogTerm() {
         if (this.log.size() == 0) return -1;
         else return this.log.get(this.log.size() - 1).term();
+    }
+
+    protected boolean isDuplicate(RaftMessage.ClientRequest msg) {
+        boolean isDuplicate = false;
+        for (Entry e : this.log){
+            if (e.command().equals(msg.command())){
+                isDuplicate = true;
+            }
+        }
+        return isDuplicate;
     }
 }

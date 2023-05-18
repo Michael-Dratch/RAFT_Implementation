@@ -34,6 +34,7 @@ public class Follower extends RaftServer {
     protected Follower(ActorContext<RaftMessage> context, TimerScheduler<RaftMessage> timers, ServerDataManager dataManager, StateMachine stateMachine, FailFlag failFlag){
         super(context, timers, dataManager, stateMachine, failFlag,  -1,-1);
         requestBuffer = new ArrayList<>();
+        currentLeader = null;
     }
 
     private ActorRef<RaftMessage> currentLeader;
@@ -60,7 +61,8 @@ public class Follower extends RaftServer {
                     break;
                 case RaftMessage.TimeOut msg:
                     handleTimeOut();
-                    getContext().getLog().info("TIMEOUT STARTING ELECTION");
+                    getContext().getLog().info("TIMEOUT STARTING ELECTION " + getContext().getSelf().path().uid());
+                    sendBufferedRequestsToSelf();
                     return Candidate.create(this.dataManager, this.stateMachine, this.failFlag, this.TIMER_KEY, this.currentTerm, this.groupRefs, this.commitIndex, this.lastApplied);
                 case RaftMessage.ClientRequest msg:
                     getContext().getLog().info("RECEIVED CLIENT REQUEST");
@@ -126,6 +128,7 @@ public class Follower extends RaftServer {
             forwardBufferedRequests(msg);
         }
         this.currentLeader = msg.leaderRef();
+        this.votedFor = null;
     }
 
     private void forwardBufferedRequests(RaftMessage.AppendEntries msg) {
@@ -198,6 +201,12 @@ public class Follower extends RaftServer {
             this.currentLeader.tell(msg);
         }
         else requestBuffer.add(msg);
+    }
+
+    private void sendBufferedRequestsToSelf() {
+        for (RaftMessage.ClientRequest request : requestBuffer){
+            getContext().getSelf().tell(request);
+        }
     }
 
 
