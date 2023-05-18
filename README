@@ -1,0 +1,51 @@
+README
+
+Michael Dratch
+CS647 RAFT IMPLEMENTATION
+5/17/23
+
+Instructions:
+The program takes 4 command line arguments:
+
+server count: the size of the Raft group the program will create
+
+client count: the number of clients that will make requests to the group
+
+concurrentFailures: how many servers the the program will make fail at once
+                    this can be between zero and n/2 - 1. One client will send fail messages
+                     that make this number of servers fail every 5 requests sent. The frequency
+                     is hardcoded to failures every 5 requests to avoid excessive program arguments.
+
+numClientRequests: the number of requests each client will make to the Raft Group
+                   requests are sent to random servers and clients stop making requests
+                   after they have reached this number. This can be increased to see the
+                   system run over a longer period of time.
+
+These arguments allow you to run the program with different load and failure characteristics.
+
+When the program starts the Servers and Clients are spawned. The clients start sending requests to random servers in
+the group. The servers log these events:
+
+-When servers time out and start elections
+-When servers receive votes
+-When servers get elected as leader
+-When servers receive client requests
+-when servers forward requests to the leader
+-The leader logs when an entry is committed
+-Clients log when they receive responses to their requests
+
+Clients will log when they have received responses to all of their requests and activity will stop
+Pressing enter will shut down the actor system and end the program.
+
+Sources:
+I used no other sources besides those provided in the assignment.
+
+Bugs:
+
+When a leader fails and a new leader is elected, it does not know what client requests have received responses.
+The leader re-sends responses back to the client for every request sent up until the most recently committed entry.
+Responses do include the request IDs so clients can discard duplicate responses, and it doesn't stop progress towards consensus.
+
+Clients resend requests after a given timeout but do not send new requests until they have received a response
+for the current request. The Raft group should be able to receive continuous requests from a clients who do not wait to
+receive responses but I didn't get a chance to test this behavior so there may be bugs here.

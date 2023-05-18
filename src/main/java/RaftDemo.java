@@ -12,6 +12,15 @@ public class RaftDemo {
         int concurrentFailures = Integer.valueOf(args[2]);
         int numClientRequests = Integer.valueOf(args[3]);
 
+
+        int maxFailure = 0;
+        if (serverCount % 2 == 0) maxFailure = serverCount/2 - 1;
+        else maxFailure = serverCount/2;
+        if (concurrentFailures > maxFailure){
+            System.out.println("ERROR: Concurrent failures must be a less than half of the server count.");
+            return;
+        }
+
         var orc = ActorSystem.create(Orchestrator.create(), "REST-DEMO");
         var done = false;
         var console = new BufferedReader(new InputStreamReader(System.in));
