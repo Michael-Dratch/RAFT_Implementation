@@ -56,7 +56,6 @@ public class Follower extends RaftServer {
                     handleAppendEntries(msg);
                     break;
                 case RaftMessage.RequestVote msg:
-                    getContext().getLog().info("RECEIVED REQUEST VOTE FROM " + msg.candidateRef());
                     handleRequestVote(msg);
                     break;
                 case RaftMessage.TimeOut msg:

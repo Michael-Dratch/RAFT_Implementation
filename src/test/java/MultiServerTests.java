@@ -163,6 +163,56 @@ public class MultiServerTests {
         probe.expectMessage(Duration.ofSeconds(10), new ClientMessage.Finished());
 
     }
+
+    @Test
+    public void TwoClientNoFailures4ServersSuccessfullyCommitsAllEntries() {
+        List<String> commands1 = getCommandList(10);
+        List<String> commands2 = getCommandList(10);
+        List<ActorRef<RaftMessage>> groupRefs = createServerGroup(4);
+        sendGroupRefsToServers(groupRefs);
+        startServerGroup(groupRefs);
+
+        ActorRef<ClientMessage> client1 = testKit.spawn(Client.create(groupRefs, commands1));
+        ActorRef<ClientMessage> client2 = testKit.spawn(Client.create(groupRefs, commands2));
+        client1.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
+        client2.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
+        client1.tell(new ClientMessage.Start());
+        client2.tell(new ClientMessage.Start());
+        probe.expectMessage(Duration.ofSeconds(5), new ClientMessage.Finished());
+        probe.expectMessage(Duration.ofSeconds(5), new ClientMessage.Finished());
+    }
+
+    @Test
+    public void TwoClientWithFailures5ServersSuccessfullyCommitsAllEntries() {
+        List<String> commands1 = getCommandList(10);
+        List<String> commands2 = getCommandList(10);
+        List<ActorRef<RaftMessage>> groupRefs = createServerGroup(4);
+        sendGroupRefsToServers(groupRefs);
+        startServerGroup(groupRefs);
+
+        ActorRef<ClientMessage> client1 = testKit.spawn(Client.create(groupRefs, commands1));
+        ActorRef<ClientMessage> client2 = testKit.spawn(Client.create(groupRefs, commands2));
+        client1.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
+        client2.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
+        client1.tell(new ClientMessage.StartFailMode(4,1));
+        client2.tell(new ClientMessage.Start());
+        probe.expectMessage(Duration.ofSeconds(5), new ClientMessage.Finished());
+        probe.expectMessage(Duration.ofSeconds(5), new ClientMessage.Finished());
+    }
+
+    @Test
+    public void oneClientRandomFailures2ServersAtATime5ServersTotalSuccessfullyCommitsAllEntries(){
+        List<String> commands = getCommandList(15);
+        List<ActorRef<RaftMessage>> groupRefs = createServerGroup(4);
+        sendGroupRefsToServers(groupRefs);
+        startServerGroup(groupRefs);
+
+        ActorRef<ClientMessage> client = testKit.spawn(Client.create(groupRefs,commands));
+        client.tell(new ClientMessage.AlertWhenFinished(probe.ref()));
+        client.tell(new ClientMessage.StartFailMode(5, 2));
+        probe.expectMessage(Duration.ofSeconds(10), new ClientMessage.Finished());
+
+    }
 }
 
 

@@ -54,11 +54,12 @@ public class Candidate extends RaftServer {
         this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
         this.dataManager.saveGroupRefs(this.groupRefs);
-        votesReceived = 0;
-        votesRequired = this.groupRefs.size()/2;
-        requestBuffer = new ArrayList<>();
+        this.votesReceived = 0;
+        this.votesRequired = getVotesRequired(groupRefs);
+        this.requestBuffer = new ArrayList<>();
         startTimer();
     }
+
 
     private Behavior<RaftMessage> dispatch(RaftMessage message){
         if (!this.failFlag.failed) {
@@ -140,6 +141,7 @@ public class Candidate extends RaftServer {
 
     private void handleRequestVoteResponse(RaftMessage.RequestVoteResponse msg) {
         if (msg.voteGranted() == true){
+            getContext().getLog().info("RECEIVED VOTE");
             votesReceived++;
         }
     }
@@ -159,6 +161,12 @@ public class Candidate extends RaftServer {
 
     private void sendRequestVoteFailResponse(RaftMessage.RequestVote msg) {
         msg.candidateRef().tell(new RaftMessage.RequestVoteResponse(this.currentTerm, false));
+    }
+
+    private int getVotesRequired(List<ActorRef<RaftMessage>> groupRefs) {
+        int size = groupRefs.size();
+        if(size % 2 == 0) return size/2;
+        else return size/2 + 1;
     }
 }
 
