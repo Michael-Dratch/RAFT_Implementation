@@ -3,14 +3,11 @@ package raftstates;
 import akka.actor.typed.*;
 import akka.actor.typed.javadsl.*;
 import datapersistence.ServerDataManager;
-import messages.OrchMessage;
 import messages.RaftMessage;
 import statemachine.StateMachine;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import static java.lang.Math.min;
 
 
 public class Follower extends RaftServer {

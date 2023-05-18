@@ -36,12 +36,8 @@ public interface RaftMessage {
 
     public record TimeOut() implements RaftMessage {}
 
-    public record HeartBeatTimeOut() implements RaftMessage {}
-
     public record Failure() implements RaftMessage {}
     public record ShutDown(ActorRef<OrchMessage> sender) implements RaftMessage {}
-
-    public record PostFailure() implements RaftMessage {}
 
 
 
@@ -54,8 +50,6 @@ public interface RaftMessage {
                                        int lastApplied) implements TestMessage {}
         public record GetBehavior(ActorRef<RaftMessage> sender) implements TestMessage {}
         public record GetBehaviorResponse(String behavior) implements TestMessage {}
-        public record GetCurrentTerm(ActorRef<RaftMessage> sender) implements TestMessage{}
-        public record GetCurrentTermResponse(int currentTerm) implements TestMessage {}
         public record GetLog(ActorRef<RaftMessage> sender) implements TestMessage{}
         public record GetLogResponse(List<Entry> log) implements TestMessage{}
         public record GetCommitIndex(ActorRef<RaftMessage> sender) implements TestMessage {}

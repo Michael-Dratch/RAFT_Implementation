@@ -5,7 +5,6 @@ import akka.actor.typed.javadsl.ActorContext;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.javadsl.TimerScheduler;
-import com.sun.security.jgss.GSSUtil;
 import datapersistence.ServerDataManager;
 import statemachine.StateMachine;
 

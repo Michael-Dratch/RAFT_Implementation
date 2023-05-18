@@ -30,8 +30,4 @@ public class RaftDemo {
     private static void terminateSystem(ActorSystem<OrchMessage> orc) {
         orc.tell(new OrchMessage.ShutDown());
     }
-
-
-
-
 }
