@@ -41,6 +41,8 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
 
     protected int lastApplied;
 
+    private Random randomGen;
+
 
     protected RaftServer(ActorContext<RaftMessage> context,
                         TimerScheduler<RaftMessage> timers,
@@ -56,6 +58,8 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         this.failFlag = failFlag;
         this.commitIndex = commitIndex;
         this.lastApplied = lastApplied;
+        this.randomGen = new Random();
+        this.randomGen.setSeed(getContext().getSelf().path().uid());
 
         initializeDataManager(context, dataManager);
         initializeState(dataManager);
@@ -77,6 +81,8 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         this.failFlag = failFlag;
         this.commitIndex = commitIndex;
         this.lastApplied = lastApplied;
+        this.randomGen = new Random();
+        this.randomGen.setSeed(getContext().getSelf().path().uid());
 
         initializeDataManager(context, dataManager);
         initializeState(dataManager);
@@ -98,9 +104,7 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     }
 
     protected void startTimer() {
-        Random rand = new Random();
-        rand.setSeed(getContext().getSelf().path().uid());
-        int randomNum = rand.nextInt(200);
+        int randomNum = randomGen.nextInt(400);
         this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(400 + randomNum));
     }
 
