@@ -101,7 +101,7 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
         Random rand = new Random();
         rand.setSeed(getContext().getSelf().path().uid());
         int randomNum = rand.nextInt(200);
-        this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(300 + randomNum));
+        this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(400 + randomNum));
     }
 
     protected void handleTimeOut() {

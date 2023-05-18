@@ -134,7 +134,6 @@ public class ServerFileWriter implements ServerDataManager {
     @Override
     public void setActorRefResolver(ActorRefResolver refResolver) {
         this.refResolver = refResolver;
-        System.out.println(this.refResolver);
     }
 
     private int serverUID;

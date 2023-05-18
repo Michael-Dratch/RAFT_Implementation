@@ -42,14 +42,14 @@ public class Leader extends RaftServer {
                         int lastApplied){
         super(context, timers, dataManager, stateMachine, failFlag, timerKey, commitIndex, lastApplied);
         this.currentTerm = currentTerm;
-        this.dataManager.saveCurrentTerm(this.currentTerm);
         this.groupRefs = groupRefs;
+        sendHeartBeats();
+        this.dataManager.saveCurrentTerm(this.currentTerm);
         this.dataManager.saveGroupRefs(this.groupRefs);
         this.refResolver = ActorRefResolver.get(getContext().getSystem());
         initializeNextIndex();
         initializeMatchIndex();
         ActorRefResolver refResolver = ActorRefResolver.get(context.getSystem());
-        sendHeartBeats();
         startTimer();
     }
 

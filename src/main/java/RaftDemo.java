@@ -13,10 +13,11 @@ public class RaftDemo {
         int numClientRequests = Integer.valueOf(args[3]);
 
 
-        int maxFailure = 0;
-        if (serverCount % 2 == 0) maxFailure = serverCount/2 - 1;
-        else maxFailure = serverCount/2;
-        if (concurrentFailures > maxFailure){
+        if (clientCount <= 0 || serverCount <= 0){
+            System.out.println("ERROR: Server Count and Client Count must both be greater than zero.");
+            return;
+        }
+        if (isConcurrentCountToLarge(serverCount, concurrentFailures)){
             System.out.println("ERROR: Concurrent failures must be a less than half of the server count.");
             return;
         }
@@ -34,6 +35,14 @@ public class RaftDemo {
                 terminateSystem(orc);
             }
         }
+    }
+
+    private static boolean isConcurrentCountToLarge(int serverCount, int concurrentFailures) {
+        int maxFailure = 0;
+        if (serverCount % 2 == 0) maxFailure = serverCount /2 - 1;
+        else maxFailure = serverCount /2;
+        boolean concurrentCountToLarge = concurrentFailures > maxFailure;
+        return concurrentCountToLarge;
     }
 
     private static void terminateSystem(ActorSystem<OrchMessage> orc) {
