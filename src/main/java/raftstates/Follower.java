@@ -98,7 +98,7 @@ public class Follower extends RaftServer {
     private boolean doesAppendEntriesFail(RaftMessage.AppendEntries msg) {
         if (msg.term() < this.currentTerm) return true;
         else if (msg.prevLogIndex() == -1) return false;
-        else if (this.log.size() < msg.prevLogIndex()) return true;
+        else if (this.log.size() <= msg.prevLogIndex()) return true;
         if (this.log.size() < 1) return false;
         else if(this.log.get(msg.prevLogIndex()).term() != msg.prevLogTerm()) return true;
         return false;

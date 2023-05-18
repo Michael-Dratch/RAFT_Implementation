@@ -104,7 +104,7 @@ abstract class RaftServer extends AbstractBehavior<RaftMessage> {
     }
 
     protected void startTimer() {
-        int randomNum = randomGen.nextInt(400);
+        int randomNum = randomGen.nextInt(600);
         this.timer.startSingleTimer(TIMER_KEY, new RaftMessage.TimeOut(), Duration.ofMillis(400 + randomNum));
     }
 

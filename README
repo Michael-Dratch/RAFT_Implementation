@@ -49,3 +49,9 @@ Responses do include the request IDs so clients can discard duplicate responses,
 Clients resend requests after a given timeout but do not send new requests until they have received a response
 for the current request. The Raft group should be able to receive continuous requests from a clients who do not wait to
 receive responses but I didn't get a chance to test this behavior so there may be bugs here.
+
+Finally, it seems that as I increase the number of servers, I also have to increase the timeout duration to avoid deadlocks.
+I think this is because my actors read all of their persistent data from files when they transition to candidates and probably
+take a long time to send vote requests and receive votes. I've steadily increased the time out duration to try to remove
+deadlocks but haven't gotten rid of them 100%. I feel like there must be a better way to eliminate the possibility of
+continuous deadlocks without continually increasing the timout duration but I haven't figured it out yet.
