@@ -52,7 +52,6 @@ public class Leader extends RaftServer {
         ActorRefResolver refResolver = ActorRefResolver.get(context.getSystem());
         sendHeartBeats();
         startTimer();
-        System.out.println("LEADER RESTARTING");
     }
 
 
@@ -177,7 +176,7 @@ public class Leader extends RaftServer {
 
     private void updateCommitIndex(int entryIndex) {
         if (entryIndex <= this.commitIndex) return;
-        getContext().getLog().info("Up to entry " + entryIndex + " committed");
+        getContext().getLog().info("ENTRY " + entryIndex + " COMMITTED");
         this.commitIndex = entryIndex;
         int prevCommit = this.lastApplied;
         this.applyCommittedEntriesToStateMachine();
@@ -187,7 +186,6 @@ public class Leader extends RaftServer {
     private void sendClientResponsesForNewCommittedRequests(int oldCommit, int newCommit) {
         for (int i = oldCommit + 1; i <= newCommit; i++){
             ActorRef<ClientMessage> client =  refResolver.resolveActorRef(this.log.get(i).command().getClientRef());
-            System.out.println(client);
             client.tell(new ClientMessage.ClientResponse(true, this.log.get(i).command().getCommandID()));
         }
     }

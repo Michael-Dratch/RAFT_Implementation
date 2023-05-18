@@ -87,7 +87,7 @@ public class LeaderTests {
     }
 
     private StringCommand getCommand() {
-        return new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()), 1, "TEST");
+        return new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()), 0, "TEST");
     }
 
     @BeforeClass
@@ -276,28 +276,26 @@ public class LeaderTests {
 
     @Test
     public void receiveMajoritySuccessfulAppendEntriesLeaderRespondsToClient() {
-        TestProbe<ClientMessage> client = testKit.createTestProbe();
         List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
         List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(),1, groupRefs, -1, -1));
-        leader.tell(new RaftMessage.ClientRequest(client.ref(), getCommand()));
+        leader.tell(new RaftMessage.ClientRequest(clientProbe.ref(), getCommand()));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
-        client.expectMessage(new ClientMessage.ClientResponse(true, 0));
+        clientProbe.expectMessage(new ClientMessage.ClientResponse(true, 0));
     }
 
 
     @Test
     public void leaderAppliesEntryToStateMachineAfterCommitting(){
-        TestProbe<ClientMessage> client = testKit.createTestProbe();
         List<TestProbe<RaftMessage>> probes = getProbeGroup(4);
         List<ActorRef<RaftMessage>> groupRefs = getProbeGroupRefs(probes);
         leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(),new FailFlag(), 1, groupRefs, -1, -1));
         Command command = getCommand();
-        leader.tell(new RaftMessage.ClientRequest(client.ref(), command));
+        leader.tell(new RaftMessage.ClientRequest(clientProbe.ref(), command));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(0), 1, true, 0));
         leader.tell(new RaftMessage.AppendEntriesResponse(groupRefs.get(1), 1, true, 0));
-        client.expectMessage(new ClientMessage.ClientResponse(true, 0));
+        clientProbe.expectMessage(new ClientMessage.ClientResponse(true, 0));
         leader.tell(new RaftMessage.TestMessage.GetStateMachineCommands(probeRef));
         List<Command> expectedCommands = new ArrayList<>();
         expectedCommands.add(command);

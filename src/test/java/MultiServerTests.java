@@ -1,7 +1,6 @@
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
-import akka.routing.AddRoutee;
 import datapersistence.ServerFileWriter;
 import messages.ClientMessage;
 import messages.RaftMessage;
@@ -11,7 +10,6 @@ import raftstates.FailFlag;
 import raftstates.Follower;
 import statemachine.Command;
 import statemachine.CommandList;
-import statemachine.StringCommand;
 import java.time.Duration;
 import static org.junit.Assert.assertEquals;
 
@@ -90,7 +88,7 @@ public class MultiServerTests {
 
     private static void sendShutDownMessages(List<ActorRef<RaftMessage>> groupRefs) {
         for (ActorRef<RaftMessage> server: groupRefs){
-            server.tell(new RaftMessage.ShutDown());
+            server.tell(new RaftMessage.ShutDown(null));
         }
     }
 
@@ -146,7 +144,6 @@ public class MultiServerTests {
         sendGetStateMachineMessages(groupRefs, probe2);
         List<RaftMessage> responses = probe2.receiveSeveralMessages(4);
         assertCorrectOrderOfServerStateMachineCommands(responses);
-        sendShutDownMessages(groupRefs);
         probe.expectNoMessage();
     }
 

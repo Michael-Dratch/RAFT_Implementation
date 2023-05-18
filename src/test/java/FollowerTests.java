@@ -2,6 +2,7 @@ import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.testkit.typed.javadsl.TestProbe;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorRefResolver;
+import com.sun.security.jgss.GSSUtil;
 import datapersistence.ServerFileWriter;
 import messages.ClientMessage;
 import messages.RaftMessage;
@@ -10,6 +11,7 @@ import raftstates.FailFlag;
 import raftstates.Follower;
 import raftstates.Leader;
 import raftstates.TestableFollower;
+import statemachine.Command;
 import statemachine.CommandList;
 import statemachine.Entry;
 import statemachine.StringCommand;
@@ -287,12 +289,21 @@ public class FollowerTests {
         List<Entry> followerLog = new ArrayList<>();
         List<Entry> expectedLog = new ArrayList<>();
         List<Entry> messageEntries = new ArrayList<>();
-        messageEntries.add(createEntry(1));
-        expectedLog.add(createEntry(1));
-        followerLog.add(createEntry(2));
+        Command command1 = new StringCommand(refResolver.toSerializationFormat(probeRef), 0, "TEST");
+        Command command2 = new StringCommand(refResolver.toSerializationFormat(probeRef), 0, "TEST");
+        Entry entry1 = new Entry(1, command1);
+        Entry entry2 = new Entry(2, command2);
+        messageEntries.add(entry1);
+        expectedLog.add(entry1);
+        followerLog.add(entry2);
         follower = testKit.spawn(TestableFollower.create(3, followerLog));
-        RaftMessage appendEntries = new RaftMessage.AppendEntries(3, probeRef, -1, 0, messageEntries, 0);
-        assertCorrectResponseAndLogAfterAppendEntries(3, true, expectedLog, appendEntries);
+        RaftMessage appendEntries = new RaftMessage.AppendEntries(3, probeRef, -1, -1, messageEntries, -1);
+
+        follower.tell(appendEntries);
+        follower.tell(new RaftMessage.TestMessage.GetLog(probe.ref()));
+        List<RaftMessage> responses = probe.receiveSeveralMessages(2);
+        assertCorrectAppendEntriesResponse(responses.get(0), 3, true);
+        assertCorrectLogResponse(responses.get(1), expectedLog);
     }
 
     @Test
@@ -300,10 +311,12 @@ public class FollowerTests {
         List<Entry> followerLog = new ArrayList<>();
         List<Entry> expectedLog = new ArrayList<>();
         List<Entry> messageEntries = new ArrayList<>();
-        messageEntries.add(createEntry(1));
-        expectedLog.add(createEntry(1));
-        followerLog.add(createEntry(2));
-        followerLog.add(createEntry(3));
+        Entry entry1 = createEntry(1);
+        Entry entry2 = createEntry(2);
+        messageEntries.add(entry1);
+        expectedLog.add(entry1);
+        followerLog.add(entry2);
+        followerLog.add(entry2);
         follower = testKit.spawn(TestableFollower.create(3, followerLog));
         RaftMessage appendEntries = new RaftMessage.AppendEntries(3, probeRef, -1, 0, messageEntries, 0);
         assertCorrectResponseAndLogAfterAppendEntries(3, true, expectedLog, appendEntries);
@@ -314,13 +327,16 @@ public class FollowerTests {
         List<Entry> followerLog = new ArrayList<>();
         List<Entry> expectedLog = new ArrayList<>();
         List<Entry> messageEntries = new ArrayList<>();
-        messageEntries.add(createEntry(1));
-        messageEntries.add(createEntry(3));
-        expectedLog.add(createEntry(1));
-        expectedLog.add(createEntry(3));
-        followerLog.add(createEntry(1));
-        followerLog.add(createEntry(2));
-        followerLog.add(createEntry(2));
+        Entry e1 = createEntry(1);
+        Entry e2 = createEntry(2);
+        Entry e3 = createEntry(3);
+        messageEntries.add(e1);
+        messageEntries.add(e3);
+        expectedLog.add(e1);
+        expectedLog.add(e3);
+        followerLog.add(e1);
+        followerLog.add(e2);
+        followerLog.add(e2);
         follower = testKit.spawn(TestableFollower.create(3, followerLog));
         RaftMessage appendEntries = new RaftMessage.AppendEntries(3, probeRef, -1, 0, messageEntries, 0);
         assertCorrectResponseAndLogAfterAppendEntries(3, true, expectedLog, appendEntries);
@@ -482,14 +498,13 @@ public class FollowerTests {
 
     @Test
     public void clientRequestToFollowerGetsRoutedToLeader(){
-        TestProbe<ClientMessage> client = testKit.createTestProbe();
         follower = testKit.spawn(Follower.create(new ServerFileWriter(), new CommandList(),new FailFlag()));
         List<ActorRef<RaftMessage>> groupRefs = new ArrayList<>();
         groupRefs.add(follower);
         ActorRef<RaftMessage> leader = testKit.spawn(Leader.create(new ServerFileWriter(), new CommandList(), new Object(), new FailFlag(), 1, groupRefs, -1, -1));
         follower.tell(new RaftMessage.AppendEntries(1, leader,-1, -1, new ArrayList<>(), -1));
-        follower.tell(new RaftMessage.ClientRequest(client.ref(), new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()),1,"Test")));
-        client.expectMessage(new ClientMessage.ClientResponse(true, 0));
+        follower.tell(new RaftMessage.ClientRequest(clientProbe.ref(), new StringCommand(refResolver.toSerializationFormat(clientProbe.ref()),0,"Test")));
+        clientProbe.expectMessage(new ClientMessage.ClientResponse(true, 0));
     }
 
     @Test

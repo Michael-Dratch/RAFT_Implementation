@@ -39,7 +39,7 @@ public interface RaftMessage {
     public record HeartBeatTimeOut() implements RaftMessage {}
 
     public record Failure() implements RaftMessage {}
-    public record ShutDown() implements RaftMessage {}
+    public record ShutDown(ActorRef<OrchMessage> sender) implements RaftMessage {}
 
     public record PostFailure() implements RaftMessage {}
 

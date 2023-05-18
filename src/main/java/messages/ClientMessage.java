@@ -9,4 +9,5 @@ public interface ClientMessage {
     public record TimeOut() implements ClientMessage {}
     public record AlertWhenFinished(ActorRef<ClientMessage> sender) implements ClientMessage{}
     public record Finished() implements ClientMessage {}
+    public record ShutDown(ActorRef<OrchMessage> sender) implements ClientMessage {}
 }

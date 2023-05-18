@@ -6,6 +6,7 @@ import akka.actor.typed.Behavior;
 import akka.actor.typed.SupervisorStrategy;
 import akka.actor.typed.javadsl.*;
 import messages.ClientMessage;
+import messages.OrchMessage;
 import messages.RaftMessage;
 import statemachine.StringCommand;
 
@@ -88,6 +89,9 @@ public class Client extends AbstractBehavior<ClientMessage> {
             case ClientMessage.TimeOut msg:
                 this.sendNextRequestToRandomServer();
                 startTimer();
+                break;
+            case ClientMessage.ShutDown msg:
+                return Behaviors.stopped();
             default:
                 break;
         }
@@ -100,6 +104,7 @@ public class Client extends AbstractBehavior<ClientMessage> {
     }
 
     private void sendNextRequestToRandomServer() {
+        if (nextRequest >= this.commandQueue.size()) return;
         int randomServer = getRandomServer();
         this.serverRefs.get(randomServer).tell(getRequestMessage(this.nextRequest, this.commandQueue.get(this.nextRequest)));
 
@@ -127,7 +132,11 @@ public class Client extends AbstractBehavior<ClientMessage> {
             getContext().getLog().info("CLIENT RECEIVED RESPONSE SUCCESS for " + response.commandID());
             if (response.commandID() < this.nextRequest) return;
             this.nextRequest++;
-            if (this.nextRequest >= this.commandQueue.size()) this.alertWhenFinished.tell(new ClientMessage.Finished());
+            if (noMoreRequestsLeft()) {
+                getContext().getLog().info("CLIENT RECEIVED RESPONSE FOR ALL REQUESTS - FINISHED");
+                this.timer.cancel(this.TIMER_KEY);
+                if (this.alertWhenFinished != null) this.alertWhenFinished.tell(new ClientMessage.Finished());
+            }
             else {
                 getContext().getLog().info("CLIENT SENDING REQUEST " + this.nextRequest);
                 sendNextRequestToRandomServer();
@@ -137,6 +146,10 @@ public class Client extends AbstractBehavior<ClientMessage> {
             getContext().getLog().info("CLIENT RECEIVED RESPONSE FAILED");
             sendNextRequestToRandomServer();
         }
+    }
+
+    private boolean noMoreRequestsLeft() {
+        return this.nextRequest >= this.commandQueue.size();
     }
 
     private int getRandomServer() {
