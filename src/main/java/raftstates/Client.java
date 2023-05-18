@@ -125,9 +125,13 @@ public class Client extends AbstractBehavior<ClientMessage> {
     private void handleClientResponse(ClientMessage.ClientResponse response){
         if (response.success()){
             getContext().getLog().info("CLIENT RECEIVED RESPONSE SUCCESS for " + response.commandID());
+            if (response.commandID() < this.nextRequest) return;
             this.nextRequest++;
-            if (this.nextRequest >= this.commandQueue.size())this.alertWhenFinished.tell(new ClientMessage.Finished());
-            else sendNextRequestToRandomServer();
+            if (this.nextRequest >= this.commandQueue.size()) this.alertWhenFinished.tell(new ClientMessage.Finished());
+            else {
+                getContext().getLog().info("CLIENT SENDING REQUEST " + this.nextRequest);
+                sendNextRequestToRandomServer();
+            }
 
         } else{
             getContext().getLog().info("CLIENT RECEIVED RESPONSE FAILED");
