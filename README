@@ -4,6 +4,11 @@ Michael Dratch
 CS647 RAFT IMPLEMENTATION
 5/17/23
 
+Project Description:
+
+This project is an implementation of the RAFT consensus protocol using the Akka actors framework.The main program simulates client requests to the consensus
+group in order to observe how to the system responds to requests and to server failures.
+
 Instructions:
 The program takes 4 command line arguments:
 
@@ -37,21 +42,3 @@ the group. The servers log these events:
 Clients will log when they have received responses to all of their requests and activity will stop
 Pressing enter will shut down the actor system and end the program.
 
-Sources:
-I used no other sources besides those provided in the assignment.
-
-Bugs:
-
-When a leader fails and a new leader is elected, it does not know what client requests have received responses.
-The leader re-sends responses back to the client for every request sent up until the most recently committed entry.
-Responses do include the request IDs so clients can discard duplicate responses, and it doesn't stop progress towards consensus.
-
-Clients resend requests after a given timeout but do not send new requests until they have received a response
-for the current request. The Raft group should be able to receive continuous requests from a clients who do not wait to
-receive responses but I didn't get a chance to test this behavior so there may be bugs here.
-
-Finally, it seems that as I increase the number of servers, I also have to increase the timeout duration to avoid deadlocks.
-I think this is because my actors read all of their persistent data from files when they transition to candidates and probably
-take a long time to send vote requests and receive votes. I've steadily increased the time out duration to try to remove
-deadlocks but haven't gotten rid of them 100%. I feel like there must be a better way to eliminate the possibility of
-continuous deadlocks without continually increasing the timout duration but I haven't figured it out yet.
